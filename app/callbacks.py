@@ -98,8 +98,6 @@ def create_graph(data, col, graph_type):
             title=wrapped_title,
             line_shape="spline"  # Smooths the line with rounded corners
         )
-    elif graph_type == "bar":
-        fig = px.bar(data, x=data.index, y=col, title=wrapped_title)
     else:  # area
         fig = px.area(data, x=data.index, y=col, title=wrapped_title)
 
@@ -231,7 +229,6 @@ def register_callbacks(app):
                                         id={"type": "graph-type-selector", "index": i},
                                         options=[
                                             {"label": "Line", "value": "line"},
-                                            {"label": "Bar", "value": "bar"},
                                             {"label": "Area", "value": "area"},
                                         ],
                                         value="line",
@@ -713,7 +710,9 @@ def register_callbacks(app):
             "Energy", "Materials", "Real Estate", "Utilities"
         ]
         n_points = len(sectors)
-        np.random.seed(42)  # For reproducible sample data
+        
+        # Generate fresh random data each time with current timestamp as seed
+        np.random.seed(int(datetime.now().timestamp()))
 
         # Common styling
         quadrant_colors = {
@@ -723,24 +722,24 @@ def register_callbacks(app):
             "weakening": "#f1c40f"    # Yellow
         }
 
-        # Generate all the data we need
-        # Rotation data
-        rel_strength = 100 + np.random.normal(0, 5, n_points)
-        rel_momentum = 100 + np.random.normal(0, 5, n_points)
+        # Generate all the data we need with more variation
+        # Rotation data - more spread for better visualization
+        rel_strength = 100 + np.random.normal(0, 8, n_points)  # Increased std from 5 to 8
+        rel_momentum = 100 + np.random.normal(0, 8, n_points)  # Increased std from 5 to 8
         
-        # Volume data
-        volume_ratios = np.random.normal(1, 0.3, n_points)
+        # Volume data - more variation
+        volume_ratios = np.random.normal(1, 0.5, n_points)  # Increased std from 0.3 to 0.5
         
-        # Performance data
-        returns = np.random.normal(0.08, 0.15, n_points)
-        volatility = np.random.normal(0.2, 0.1, n_points)
+        # Performance data - more realistic ranges
+        returns = np.random.normal(0.10, 0.20, n_points)  # Increased variation
+        volatility = np.random.normal(0.25, 0.15, n_points)  # Increased variation
         rf_rate = 0.02
         sharpe_ratios = (returns - rf_rate) / volatility
         
-        # Valuation data
-        pe_ratios = np.random.normal(20, 5, n_points)
-        growth_rates = np.random.normal(0.1, 0.05, n_points)
-        market_caps = np.random.uniform(1000, 10000, n_points)
+        # Valuation data - more spread
+        pe_ratios = np.random.normal(25, 10, n_points)  # Increased std from 5 to 10
+        growth_rates = np.random.normal(0.15, 0.08, n_points)  # Increased variation
+        market_caps = np.random.uniform(500, 15000, n_points)  # Wider range
         peg_ratios = pe_ratios / (growth_rates * 100)
 
         # Create the figures
@@ -910,11 +909,17 @@ def create_rotation_quadrant(sectors, show_labels, quadrant_colors, selected_per
 
     # Add quadrant labels if enabled
     if show_labels:
+        # Calculate positions based on data range
+        x_range = max(rel_strength) - min(rel_strength)
+        y_range = max(rel_momentum) - min(rel_momentum)
+        label_offset_x = x_range * 0.05
+        label_offset_y = y_range * 0.05
+        
         for pos, label, color in [
-            ({"x": 105, "y": 105}, "LEADING", quadrant_colors["leading"]),
-            ({"x": 95, "y": 105}, "IMPROVING", quadrant_colors["improving"]),
-            ({"x": 95, "y": 95}, "LAGGING", quadrant_colors["lagging"]),
-            ({"x": 105, "y": 95}, "WEAKENING", quadrant_colors["weakening"]),
+            ({"x": 100 + label_offset_x, "y": 100 + label_offset_y}, "LEADING", quadrant_colors["leading"]),
+            ({"x": 100 - label_offset_x, "y": 100 + label_offset_y}, "IMPROVING", quadrant_colors["improving"]),
+            ({"x": 100 - label_offset_x, "y": 100 - label_offset_y}, "LAGGING", quadrant_colors["lagging"]),
+            ({"x": 100 + label_offset_x, "y": 100 - label_offset_y}, "WEAKENING", quadrant_colors["weakening"]),
         ]:
             fig.add_annotation(
                 x=pos["x"],
@@ -928,17 +933,17 @@ def create_rotation_quadrant(sectors, show_labels, quadrant_colors, selected_per
         title=f"Sector Rotation ({selected_period})",
         xaxis=dict(
             title="Relative Strength",
-            range=[90, 110],
             showgrid=True,
             gridcolor="lightgray",
             zeroline=False,
+            autorange=True,
         ),
         yaxis=dict(
             title="Relative Momentum",
-            range=[90, 110],
             showgrid=True,
             gridcolor="lightgray",
             zeroline=False,
+            autorange=True,
         ),
         plot_bgcolor="white",
         showlegend=False,

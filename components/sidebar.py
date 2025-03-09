@@ -197,6 +197,40 @@ def create_funds_flow_sidebar():
                 ),
                 dbc.CardBody([
                     html.Div(id="sector-stats-table"),
+                    html.Hr(style={"margin": "10px 0"}),
+                    html.Div([
+                        html.Div("Rotation Types:", style={"fontSize": "12px", "fontWeight": "bold", "marginBottom": "6px"}),
+                        html.Div(style={"fontSize": "11px", "display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "8px"}, children=[
+                            html.Div([
+                                html.Div([
+                                    html.Span("●", style={"color": "#2ecc71", "marginRight": "4px"}),
+                                    html.Span("Leading", style={"fontWeight": "bold"}),
+                                ]),
+                                html.Div("Strong momentum & strength", style={"color": "gray", "marginLeft": "12px"}),
+                            ]),
+                            html.Div([
+                                html.Div([
+                                    html.Span("●", style={"color": "#3498db", "marginRight": "4px"}),
+                                    html.Span("Improving", style={"fontWeight": "bold"}),
+                                ]),
+                                html.Div("Rising momentum, weak strength", style={"color": "gray", "marginLeft": "12px"}),
+                            ]),
+                            html.Div([
+                                html.Div([
+                                    html.Span("●", style={"color": "#e74c3c", "marginRight": "4px"}),
+                                    html.Span("Lagging", style={"fontWeight": "bold"}),
+                                ]),
+                                html.Div("Weak momentum & strength", style={"color": "gray", "marginLeft": "12px"}),
+                            ]),
+                            html.Div([
+                                html.Div([
+                                    html.Span("●", style={"color": "#f1c40f", "marginRight": "4px"}),
+                                    html.Span("Weakening", style={"fontWeight": "bold"}),
+                                ]),
+                                html.Div("Falling momentum, strong strength", style={"color": "gray", "marginLeft": "12px"}),
+                            ]),
+                        ]),
+                    ], style={"borderTop": "1px solid #dee2e6", "paddingTop": "8px"}),
                 ]),
             ],
             className="mt-4",

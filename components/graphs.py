@@ -34,12 +34,8 @@ content = dbc.Container(
                                             id="sector-rotation-quadrant",
                                             style={"height": "40vh"},
                                             config={
-                                                "displayModeBar": True,
+                                                "displayModeBar": False,
                                                 "displaylogo": False,
-                                                "modeBarButtonsToRemove": [
-                                                    "lasso2d",
-                                                    "select2d",
-                                                ],
                                             },
                                         ),
                                     ],
