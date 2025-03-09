@@ -126,42 +126,6 @@ def create_economics_sidebar():
         ),
     ]
 
-def create_correlations_sidebar():
-    return [
-        html.H1(
-            "Correlations Analysis",
-            className="text-center",
-            style={"margin-bottom": MARGIN_TITLE_TO_LAST_UPDATED},
-        ),
-        dbc.Card(
-            [
-                html.H3("Correlation Settings", className="text-center"),
-                html.Label("Select Base Indicator", style={"margin-top": "10px"}),
-                dcc.Dropdown(
-                    id="correlation-base-indicator",
-                    options=group_options,
-                    placeholder="Select indicator to correlate against",
-                    style={"width": "100%", "margin-bottom": "10px"},
-                ),
-                html.Label("Correlation Period", style={"margin-top": "10px"}),
-                dcc.Dropdown(
-                    id="correlation-period",
-                    options=[
-                        {"label": "1 Year", "value": "1Y"},
-                        {"label": "3 Years", "value": "3Y"},
-                        {"label": "5 Years", "value": "5Y"},
-                        {"label": "10 Years", "value": "10Y"},
-                        {"label": "All Time", "value": "ALL"},
-                    ],
-                    value="3Y",
-                    style={"width": "100%"},
-                ),
-            ],
-            body=True,
-            style={"width": "100%", "padding": "5px"},
-        ),
-    ]
-
 def create_funds_flow_sidebar():
     return [
         html.H1(
@@ -172,74 +136,69 @@ def create_funds_flow_sidebar():
         dbc.Card(
             [
                 html.H3("Analysis Settings", className="text-center"),
-                html.Label("Date Range", style={"margin-top": "10px"}),
-                dcc.DatePickerRange(
-                    id="date-picker",
-                    min_date_allowed="1970-01-01",
-                    max_date_allowed=today_str,
-                    start_date="2020-01-01",
-                    end_date=today_str,
-                    display_format="YYYY-MM-DD",
-                    style={"width": "100%", "textAlign": "center"},
-                ),
-                html.Label("Zoom Date Range", style={"margin-top": "10px"}),
-                dcc.RangeSlider(
-                    id="date-range-slider",
-                    min=min_month,
-                    max=max_month,
-                    step=1,
-                    value=[default_start_month, default_end_month],
-                    marks=marks,
-                    tooltip={"placement": "bottom", "always_visible": True},
-                ),
-                dbc.ButtonGroup(
+                html.Div(
                     [
-                        dbc.Button("Last 3mo", id="btn-last-3mo", n_clicks=0, color="primary", outline=True, size="sm", className="me-1"),
-                        dbc.Button("Last 6mo", id="btn-last-6mo", n_clicks=0, color="primary", outline=True, size="sm", className="me-1"),
-                        dbc.Button("Last 12mo", id="btn-last-12mo", n_clicks=0, color="primary", outline=True, size="sm", className="me-1"),
-                        dbc.Button("Last 24mo", id="btn-last-24mo", n_clicks=0, color="primary", outline=True, size="sm", className="me-1"),
+                        html.Label("Period Selection", className="mt-3"),
+                        html.Div(id="funds-flow-period-info", className="text-center text-muted mb-2"),
+                        dbc.ButtonGroup(
+                            [
+                                dbc.Button("4W", id="btn-period-4w", color="primary", outline=True),
+                                dbc.Button("8W", id="btn-period-8w", color="primary", outline=True),
+                                dbc.Button("12W", id="btn-period-12w", color="primary", outline=True),
+                                dbc.Button("26W", id="btn-period-26w", color="primary", outline=True),
+                                dbc.Button("39W", id="btn-period-39w", color="primary", outline=True),
+                                dbc.Button("52W", id="btn-period-52w", color="primary", outline=True),
+                            ],
+                            className="d-flex flex-wrap justify-content-center",
+                            style={"gap": "5px"},
+                        ),
                     ],
-                    className="d-flex justify-content-center",
-                    style={"margin-top": "10px"},
+                    className="mb-4",
                 ),
-                html.Hr(style={"margin": "15px 0"}),
-                html.Label("Visualization Type", style={"margin-top": "10px"}),
-                dcc.RadioItems(
-                    id="visualization-type",
-                    options=[
-                        {"label": "Sector Rotation", "value": "sector_rotation"},
-                        {"label": "Relative Analysis", "value": "relative_analysis"},
+                html.H3("Visualization Settings", className="text-center mt-4"),
+                html.Div(
+                    [
+                        html.Label("Momentum Type", className="mt-3"),
+                        dcc.Dropdown(
+                            id="funds-flow-momentum-type",
+                            options=[
+                                {"label": "Price", "value": "price"},
+                                {"label": "Volume", "value": "volume"},
+                                {"label": "Combined", "value": "combined"},
+                            ],
+                            value="price",
+                            clearable=False,
+                        ),
+                        dbc.Checklist(
+                            options=[{"label": "Show Labels", "value": True}],
+                            value=[True],
+                            id="funds-flow-show-labels",
+                            switch=True,
+                            className="mt-3",
+                        ),
+                        dbc.Checklist(
+                            options=[{"label": "Show Trends", "value": True}],
+                            value=[True],
+                            id="funds-flow-show-trends",
+                            switch=True,
+                            className="mt-2",
+                        ),
+                        html.Label("Bubble Size", className="mt-3"),
+                        dcc.Dropdown(
+                            id="funds-flow-bubble-size",
+                            options=[
+                                {"label": "Equal", "value": "equal"},
+                                {"label": "Market Cap", "value": "market_cap"},
+                                {"label": "Volume", "value": "volume"},
+                            ],
+                            value="equal",
+                            clearable=False,
+                        ),
                     ],
-                    value="sector_rotation",
-                    style={"margin-top": "5px"},
-                ),
-                html.Hr(style={"margin": "15px 0"}),
-                html.Label("Select Flow Type", style={"margin-top": "10px"}),
-                dcc.Dropdown(
-                    id="flow-type-selector",
-                    options=[
-                        {"label": "Equity Flows", "value": "equity"},
-                        {"label": "Bond Flows", "value": "bond"},
-                        {"label": "Money Market Flows", "value": "money_market"},
-                        {"label": "Commodity Flows", "value": "commodity"},
-                    ],
-                    value="equity",
-                    style={"width": "100%"},
-                ),
-                html.Label("Flow Period", style={"margin-top": "10px"}),
-                dcc.RadioItems(
-                    id="flow-period",
-                    options=[
-                        {"label": "Daily", "value": "D"},
-                        {"label": "Weekly", "value": "W"},
-                        {"label": "Monthly", "value": "M"},
-                    ],
-                    value="W",
-                    style={"margin-top": "5px"},
                 ),
             ],
             body=True,
-            style={"width": "100%", "padding": "5px"},
+            style={"width": "100%", "padding": "15px"},
         ),
     ]
 

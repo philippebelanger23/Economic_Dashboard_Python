@@ -18,6 +18,7 @@ app = dash.Dash(
 
 app.layout = html.Div(
     [
+        dcc.Store(id="funds-flow-selected-period", data="12W"),
         dbc.Container(
             [
                 dbc.Row(

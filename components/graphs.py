@@ -21,28 +21,35 @@ content = dbc.Container(
                     ],
                 ),
                 dcc.Tab(
-                    label="Correlations",
-                    value="tab-correlations",
-                    children=[
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    html.Div(id="correlations-container"),
-                                    width=12,
-                                ),
-                            ],
-                            style={"margin-top": "10px"},
-                        )
-                    ],
-                ),
-                dcc.Tab(
                     label="Funds Flow",
                     value="tab-funds-flow",
                     children=[
                         dbc.Row(
                             [
                                 dbc.Col(
-                                    html.Div(id="funds-flow-container"),
+                                    [
+                                        # Main quadrant graph
+                                        dcc.Graph(
+                                            id="funds-flow-quadrant",
+                                            style={"height": "70vh"},
+                                            config={
+                                                "displayModeBar": True,
+                                                "displaylogo": False,
+                                                "modeBarButtonsToRemove": [
+                                                    "lasso2d",
+                                                    "select2d",
+                                                ],
+                                            },
+                                        ),
+                                        # Legend and stats below the graph
+                                        dbc.Card(
+                                            dbc.CardBody([
+                                                html.H6("Quadrant Statistics", className="text-center"),
+                                                html.Div(id="funds-flow-stats"),
+                                            ]),
+                                            className="mt-3",
+                                        ),
+                                    ],
                                     width=12,
                                 ),
                             ],

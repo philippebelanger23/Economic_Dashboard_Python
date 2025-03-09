@@ -14,6 +14,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, ALL, MATCH, State
+from dash.exceptions import PreventUpdate
+import numpy as np
 
 # Local imports
 from config.settings import RECESSIONS_FILE, RSS_FEED_URLS
@@ -22,7 +24,6 @@ from data.data_processing import get_economic_data
 from data.mappings import INDICATORS, INDICATOR_GROUPS
 from components.sidebar import (
     create_economics_sidebar,
-    create_correlations_sidebar,
     create_funds_flow_sidebar,
     create_news_sidebar,
 )
@@ -383,7 +384,7 @@ def register_callbacks(app):
             }
             for i in group_indicators
         ]
-        idx = selector_id["index"] - 1
+        idx = selector_id['index'] - 1
         default = (
             group_indicators[idx]
             if idx < len(group_indicators)
@@ -631,8 +632,6 @@ def register_callbacks(app):
     def update_sidebar(selected_tab):
         if selected_tab == "tab-economics":
             return create_economics_sidebar()
-        elif selected_tab == "tab-correlations":
-            return create_correlations_sidebar()
         elif selected_tab == "tab-funds-flow":
             return create_funds_flow_sidebar()
         elif selected_tab == "tab-news":
@@ -640,231 +639,283 @@ def register_callbacks(app):
         return create_economics_sidebar()  # Default to economics sidebar
 
     @app.callback(
+        Output("funds-flow-selected-period", "data"),
+        Output("funds-flow-period-info", "children"),
+        [
+            Input("btn-period-4w", "n_clicks"),
+            Input("btn-period-8w", "n_clicks"),
+            Input("btn-period-12w", "n_clicks"),
+            Input("btn-period-26w", "n_clicks"),
+            Input("btn-period-39w", "n_clicks"),
+            Input("btn-period-52w", "n_clicks"),
+        ],
+        State("funds-flow-selected-period", "data"),
+        prevent_initial_call=False
+    )
+    def update_funds_flow_period(n4w, n8w, n12w, n26w, n39w, n52w, current_period):
+        ctx = callback_context
+        if not ctx.triggered:
+            # Return default values on initial load
+            default_period = "12W"
+            return default_period, "12 Weeks (3 Months)"
+            
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        period_mapping = {
+            "btn-period-4w": "4W",
+            "btn-period-8w": "8W",
+            "btn-period-12w": "12W",
+            "btn-period-26w": "26W",
+            "btn-period-39w": "39W",
+            "btn-period-52w": "52W",
+        }
+        
+        selected_period = period_mapping.get(button_id, current_period or "12W")
+        
+        # Create a more descriptive text for the display
+        period_descriptions = {
+            "4W": "4 Weeks (1 Month)",
+            "8W": "8 Weeks (2 Months)",
+            "12W": "12 Weeks (3 Months)",
+            "26W": "26 Weeks (6 Months)",
+            "39W": "39 Weeks (9 Months)",
+            "52W": "52 Weeks (1 Year)",
+        }
+        
+        period_info = period_descriptions.get(selected_period, selected_period)
+        
+        return selected_period, period_info
+        
+    @app.callback(
         Output("funds-flow-container", "children"),
         [
-            Input("date-range-slider", "value"),
-            Input("visualization-type", "value"),
-            Input("flow-type-selector", "value"),
-            Input("flow-period", "value"),
-            Input("date-picker", "start_date"),
-            Input("date-picker", "end_date")
+            Input("dashboard-tabs", "value"),
+            Input("funds-flow-selected-period", "data")
         ]
     )
-    def update_funds_flow(slider_range, viz_type, flow_type, flow_period, start_date, end_date):
-        today = pd.to_datetime(datetime.today().strftime("%Y-%m-%d"))
-        start_months, end_months = slider_range
-        start_dt = months_to_date(start_months)
-        end_dt = months_to_date(end_months)
-        end_dt = min(end_dt, today)
-
-        picker_start = pd.to_datetime(start_date)
-        picker_end = pd.to_datetime(end_date)
-        start_dt = max(start_dt, picker_start)
-        end_dt = min(end_dt, picker_end)
-        
-        if viz_type == "sector_rotation":
-            # Create a figure for sector rotation
-            sectors = ['Technology', 'Healthcare', 'Financials', 'Consumer Discretionary', 
-                      'Consumer Staples', 'Industrials', 'Energy', 'Materials', 
-                      'Utilities', 'Real Estate', 'Communication Services']
+    def update_funds_flow(current_tab, selected_period):
+        # Only proceed if we're on the funds flow tab
+        if current_tab != "tab-funds-flow":
+            raise PreventUpdate
             
-            # Sample data - in production this would come from your data source
-            flows = [15, 10, -5, 8, 3, -2, 12, -4, 6, -8, 7]  # Example fund flows in billions
-            performance = [8, 5, -2, 6, 2, -1, 10, -3, 4, -5, 5]  # Example sector performance %
+        # Handle the case when no period is selected
+        if not selected_period:
+            selected_period = "12W"  # Default to 12 weeks
             
-            fig = px.scatter(
-                x=performance,
-                y=flows,
-                size=[abs(f) * 2 for f in flows],
-                text=sectors,
-                title=f"Sector Rotation Analysis ({flow_type.replace('_', ' ').title()} - {flow_period})",
-                labels={
-                    'x': 'Sector Performance (%)',
-                    'y': 'Fund Flows (Billions $)',
-                    'size': 'Absolute Flow'
-                }
-            )
-            
-            fig.update_traces(
-                textposition='top center',
-                marker=dict(
-                    sizemode='area',
-                    sizeref=2.*max(flows)/(40.**2),
-                    sizemin=4,
-                    color=['#2ecc71' if f > 0 else '#e74c3c' for f in flows]
-                )
-            )
-            
-            fig.update_layout(
-                showlegend=False,
-                plot_bgcolor='white',
-                title_x=0.5,
-                title_font_size=20,
-                margin=dict(l=50, r=50, t=80, b=50),
-                shapes=[
-                    dict(
-                        type="line",
-                        x0=min(performance),
-                        y0=0,
-                        x1=max(performance),
-                        y1=0,
-                        line=dict(color="black", width=1, dash="dash")
-                    ),
-                    dict(
-                        type="line",
-                        x0=0,
-                        y0=min(flows),
-                        x1=0,
-                        y1=max(flows),
-                        line=dict(color="black", width=1, dash="dash")
-                    )
-                ],
-                xaxis=dict(showgrid=True, gridwidth=1, gridcolor='lightgrey'),
-                yaxis=dict(showgrid=True, gridwidth=1, gridcolor='lightgrey'),
-                paper_bgcolor='white',
-                annotations=[
-                    dict(
-                        x=max(performance) * 0.75,
-                        y=max(flows) * 0.75,
-                        text="Leaders<br>(Strong Performance,<br>Inflows)",
-                        showarrow=False,
-                        font=dict(size=10, color='rgba(0,0,0,0.5)'),
-                        align='center'
-                    ),
-                    dict(
-                        x=min(performance) * 0.75,
-                        y=max(flows) * 0.75,
-                        text="Contrarian Bets<br>(Weak Performance,<br>Inflows)",
-                        showarrow=False,
-                        font=dict(size=10, color='rgba(0,0,0,0.5)'),
-                        align='center'
-                    ),
-                    dict(
-                        x=max(performance) * 0.75,
-                        y=min(flows) * 0.75,
-                        text="Profit Taking<br>(Strong Performance,<br>Outflows)",
-                        showarrow=False,
-                        font=dict(size=10, color='rgba(0,0,0,0.5)'),
-                        align='center'
-                    ),
-                    dict(
-                        x=min(performance) * 0.75,
-                        y=min(flows) * 0.75,
-                        text="Laggards<br>(Weak Performance,<br>Outflows)",
-                        showarrow=False,
-                        font=dict(size=10, color='rgba(0,0,0,0.5)'),
-                        align='center'
-                    )
-                ]
-            )
-        
-        else:  # relative_analysis
-            # Sample data for relative analysis
-            sectors = ['Technology', 'Healthcare', 'Financials', 'Consumer Discretionary', 
-                      'Consumer Staples', 'Industrials', 'Energy', 'Materials', 
-                      'Utilities', 'Real Estate', 'Communication Services']
-            
-            # Sample data - in production this would come from your data source
-            relative_strength = [1.2, 0.8, 0.9, 1.1, 0.95, 1.05, 1.3, 0.85, 0.75, 0.9, 1.15]
-            relative_momentum = [0.1, -0.05, 0.02, 0.08, -0.03, 0.04, 0.15, -0.07, -0.12, 0.03, 0.07]
-            
-            fig = px.scatter(
-                x=relative_strength,
-                y=relative_momentum,
-                size=[abs(m) * 20 for m in relative_momentum],  # Size based on momentum
-                text=sectors,
-                title=f"Relative Strength vs Momentum Analysis ({flow_type.replace('_', ' ').title()} - {flow_period})",
-                labels={
-                    'x': 'Relative Strength (vs Index)',
-                    'y': 'Relative Momentum (WoW Change)',
-                    'size': 'Absolute Momentum'
-                }
-            )
-            
-            fig.update_traces(
-                textposition='top center',
-                marker=dict(
-                    sizemode='area',
-                    sizeref=2.*max(abs(min(relative_momentum)), abs(max(relative_momentum)))/(40.**2),
-                    sizemin=4,
-                    color=['#2ecc71' if m > 0 else '#e74c3c' for m in relative_momentum]
-                )
-            )
-            
-            fig.update_layout(
-                showlegend=False,
-                plot_bgcolor='white',
-                title_x=0.5,
-                title_font_size=20,
-                margin=dict(l=50, r=50, t=80, b=50),
-                shapes=[
-                    dict(
-                        type="line",
-                        x0=min(relative_strength),
-                        y0=0,
-                        x1=max(relative_strength),
-                        y1=0,
-                        line=dict(color="black", width=1, dash="dash")
-                    ),
-                    dict(
-                        type="line",
-                        x0=1,  # Reference line at 1.0 (index level)
-                        y0=min(relative_momentum),
-                        x1=1,
-                        y1=max(relative_momentum),
-                        line=dict(color="black", width=1, dash="dash")
-                    )
-                ],
-                xaxis=dict(showgrid=True, gridwidth=1, gridcolor='lightgrey'),
-                yaxis=dict(showgrid=True, gridwidth=1, gridcolor='lightgrey'),
-                paper_bgcolor='white',
-                annotations=[
-                    dict(
-                        x=max(relative_strength) * 0.75,
-                        y=max(relative_momentum) * 0.75,
-                        text="Strong & Improving<br>(High RS, Rising)",
-                        showarrow=False,
-                        font=dict(size=10, color='rgba(0,0,0,0.5)'),
-                        align='center'
-                    ),
-                    dict(
-                        x=min(relative_strength) * 1.1,
-                        y=max(relative_momentum) * 0.75,
-                        text="Weak but Improving<br>(Low RS, Rising)",
-                        showarrow=False,
-                        font=dict(size=10, color='rgba(0,0,0,0.5)'),
-                        align='center'
-                    ),
-                    dict(
-                        x=max(relative_strength) * 0.75,
-                        y=min(relative_momentum) * 0.75,
-                        text="Strong but Weakening<br>(High RS, Falling)",
-                        showarrow=False,
-                        font=dict(size=10, color='rgba(0,0,0,0.5)'),
-                        align='center'
-                    ),
-                    dict(
-                        x=min(relative_strength) * 1.1,
-                        y=min(relative_momentum) * 0.75,
-                        text="Weak & Weakening<br>(Low RS, Falling)",
-                        showarrow=False,
-                        font=dict(size=10, color='rgba(0,0,0,0.5)'),
-                        align='center'
-                    )
-                ]
-            )
-        
-        return dbc.Card(
-            dbc.CardBody(
-                dcc.Graph(
-                    figure=fig,
-                    config={'displayModeBar': False},
-                    style={
-                        'height': '80vh',
-                        'width': '100%'
-                    }
-                ),
-                style={'padding': '5px'}
-            ),
-            style={'margin': '10px', 'height': '85vh'}
+        # Return a placeholder message with the selected period
+        return html.Div(
+            [
+                html.H3("Funds Flow Analysis", className="text-center mb-4"),
+                html.H5(f"Selected Period: {selected_period}", className="text-center mb-3"),
+                html.P("The visualization for this tab is being built.", className="text-center")
+            ],
+            style={"padding": "20px", "margin-top": "50px"}
         )
+
+    @app.callback(
+        [
+            Output("btn-period-4w", "color"),
+            Output("btn-period-8w", "color"),
+            Output("btn-period-12w", "color"),
+            Output("btn-period-26w", "color"),
+            Output("btn-period-39w", "color"),
+            Output("btn-period-52w", "color"),
+            Output("btn-period-4w", "outline"),
+            Output("btn-period-8w", "outline"),
+            Output("btn-period-12w", "outline"),
+            Output("btn-period-26w", "outline"),
+            Output("btn-period-39w", "outline"),
+            Output("btn-period-52w", "outline"),
+        ],
+        Input("funds-flow-selected-period", "data")
+    )
+    def update_period_button_styles(selected_period):
+        colors = ["primary"] * 6
+        outlines = [True] * 6
+        
+        if not selected_period:
+            selected_period = "12W"
+        
+        button_indices = {
+            "4W": 0, "8W": 1, "12W": 2,
+            "26W": 3, "39W": 4, "52W": 5
+        }
+        
+        if selected_period in button_indices:
+            idx = button_indices[selected_period]
+            outlines[idx] = False
+        
+        return (
+            colors[0], colors[1], colors[2], colors[3], colors[4], colors[5],
+            outlines[0], outlines[1], outlines[2], outlines[3], outlines[4], outlines[5]
+        )
+
+    @app.callback(
+        [
+            Output("funds-flow-quadrant", "figure"),
+            Output("funds-flow-stats", "children"),
+        ],
+        [
+            Input("funds-flow-selected-period", "data"),
+            Input("funds-flow-momentum-type", "value"),
+            Input("funds-flow-show-labels", "value"),
+            Input("funds-flow-show-trends", "value"),
+            Input("funds-flow-bubble-size", "value"),
+        ]
+    )
+    def update_funds_flow_quadrant(
+        selected_period,
+        momentum_type,
+        show_labels,
+        show_trends,
+        bubble_size,
+    ):
+        # For now, create sample data (replace with real data later)
+        np.random.seed(42)
+        n_points = 11  # 11 sectors in S&P 500
+        
+        # Sample data
+        sectors = [
+            "Technology", "Healthcare", "Financials", "Consumer Discretionary",
+            "Communication Services", "Industrials", "Consumer Staples",
+            "Energy", "Materials", "Real Estate", "Utilities"
+        ]
+        
+        # Generate data centered around 100
+        base_spread = 40  # Initial spread for data generation
+        rel_strength = 100 + np.random.normal(0, base_spread/2, n_points)
+        rel_momentum = 100 + np.random.normal(0, base_spread/2, n_points)
+        
+        # Calculate dynamic range based on actual data spread
+        strength_range = max(abs(rel_strength - 100).max(), 20)  # Minimum 20 points range
+        momentum_range = max(abs(rel_momentum - 100).max(), 20)  # Minimum 20 points range
+        range_percent = max(strength_range, momentum_range)
+        
+        # Add padding and ensure minimum/maximum range
+        range_percent = range_percent * 1.2  # Add 20% padding
+        range_percent = max(range_percent, 20)  # Minimum range of 20
+        range_percent = min(range_percent, 40)  # Maximum range of 40
+        
+        sizes = np.random.uniform(20, 50, n_points) if bubble_size == "equal" else np.random.uniform(20, 100, n_points)
+        
+        # Create the scatter plot
+        fig = go.Figure()
+
+        # Add quadrant lines at 100
+        fig.add_hline(y=100, line_dash="dash", line_color="gray", opacity=0.5)
+        fig.add_vline(x=100, line_dash="dash", line_color="gray", opacity=0.5)
+
+        # Add the scatter plot
+        fig.add_trace(
+            go.Scatter(
+                x=rel_strength,
+                y=rel_momentum,
+                mode="markers+text",
+                marker=dict(
+                    size=sizes,
+                    color=rel_strength,  # Color based on relative strength
+                    colorscale="RdYlGn",  # Red to Green scale
+                    showscale=True,
+                    colorbar=dict(
+                        title="Relative Strength",
+                        thickness=20,
+                        len=0.5,
+                    ),
+                    cmin=100-range_percent,  # Set color scale range
+                    cmax=100+range_percent,
+                ),
+                text=sectors,
+                textposition="top center",
+                hovertemplate=(
+                    "<b>%{text}</b><br>" +
+                    "Rel. Strength: %{x:.1f}<br>" +
+                    "Rel. Momentum: %{y:.1f}<br>" +
+                    "<extra></extra>"
+                ),
+            )
+        )
+
+        # Calculate label positions - place them at 60% of the way from center to edge
+        label_offset = range_percent * 0.6
+        if show_labels:
+            quadrant_labels = [
+                dict(
+                    x=100+label_offset, y=100+label_offset,
+                    text="Leading<br>(Strong, Improving)",
+                    showarrow=False,
+                    font=dict(size=12),
+                    xanchor="center",
+                    yanchor="middle"
+                ),
+                dict(
+                    x=100-label_offset, y=100+label_offset,
+                    text="Improving<br>(Weak, Improving)",
+                    showarrow=False,
+                    font=dict(size=12),
+                    xanchor="center",
+                    yanchor="middle"
+                ),
+                dict(
+                    x=100-label_offset, y=100-label_offset,
+                    text="Lagging<br>(Weak, Weakening)",
+                    showarrow=False,
+                    font=dict(size=12),
+                    xanchor="center",
+                    yanchor="middle"
+                ),
+                dict(
+                    x=100+label_offset, y=100-label_offset,
+                    text="Weakening<br>(Strong, Weakening)",
+                    showarrow=False,
+                    font=dict(size=12),
+                    xanchor="center",
+                    yanchor="middle"
+                ),
+            ]
+            fig.update_layout(annotations=quadrant_labels)
+
+        # Update layout with fixed, symmetric axes around 100
+        fig.update_layout(
+            title=f"S&P 500 Sector Relative Strength vs Momentum ({selected_period})",
+            xaxis=dict(
+                title="Relative Strength",
+                zeroline=False,
+                showgrid=True,
+                gridcolor="lightgray",
+                range=[100-range_percent, 100+range_percent],
+                dtick=20,  # Set major grid lines every 20 units
+            ),
+            yaxis=dict(
+                title="Relative Momentum",
+                zeroline=False,
+                showgrid=True,
+                gridcolor="lightgray",
+                range=[100-range_percent, 100+range_percent],
+                scaleanchor="x",
+                scaleratio=1,
+                dtick=20,  # Set major grid lines every 20 units
+            ),
+            plot_bgcolor="white",
+            showlegend=False,
+            margin=dict(l=50, r=50, t=50, b=50),  # Adjust margins for better layout
+        )
+
+        # Calculate statistics
+        stats = []
+        for quadrant, (condition_x, condition_y, label) in enumerate([
+            (rel_strength > 100, rel_momentum > 100, "Leading"),
+            (rel_strength < 100, rel_momentum > 100, "Improving"),
+            (rel_strength < 100, rel_momentum < 100, "Lagging"),
+            (rel_strength > 100, rel_momentum < 100, "Weakening"),
+        ]):
+            mask = condition_x & condition_y
+            count = np.sum(mask)
+            sectors_in_quadrant = [s for s, m in zip(sectors, mask) if m]
+            
+            stats.append(
+                html.Div([
+                    html.Strong(f"{label}: {count}"),
+                    html.Div(", ".join(sectors_in_quadrant) if sectors_in_quadrant else "None"),
+                ], className="mb-2")
+            )
+
+        return fig, html.Div(stats)
