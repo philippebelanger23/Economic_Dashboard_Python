@@ -21,7 +21,7 @@ content = dbc.Container(
                     ],
                 ),
                 dcc.Tab(
-                    label="Funds Flow",
+                    label="Sector Analysis",
                     value="tab-funds-flow",
                     children=[
                         dbc.Row(

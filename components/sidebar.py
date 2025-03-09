@@ -129,7 +129,7 @@ def create_economics_sidebar():
 def create_funds_flow_sidebar():
     return [
         html.H1(
-            "Funds Flow Analysis",
+            "Sector Analysis",
             className="text-center",
             style={"margin-bottom": MARGIN_TITLE_TO_LAST_UPDATED},
         ),
@@ -158,15 +158,15 @@ def create_funds_flow_sidebar():
                 html.H3("Visualization Settings", className="text-center mt-4"),
                 html.Div(
                     [
-                        html.Label("Momentum Type", className="mt-3"),
+                        html.Label("Analysis", className="mt-3"),
                         dcc.Dropdown(
                             id="funds-flow-momentum-type",
                             options=[
-                                {"label": "Price", "value": "price"},
-                                {"label": "Volume", "value": "volume"},
-                                {"label": "Combined", "value": "combined"},
+                                {"label": "Sector Rotation", "value": "rotation"},
+                                {"label": "Relative Performance", "value": "performance"},
+                                {"label": "Relative Valuation", "value": "valuation"},
                             ],
-                            value="price",
+                            value="rotation",
                             clearable=False,
                         ),
                         dbc.Checklist(

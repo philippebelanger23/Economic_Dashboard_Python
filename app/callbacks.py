@@ -770,30 +770,66 @@ def register_callbacks(app):
         bubble_size,
     ):
         # For now, create sample data (replace with real data later)
-        np.random.seed(42)
+        np.random.seed(None)  # Allow random data each time
         n_points = 11  # 11 sectors in S&P 500
         
         # Sample data
         sectors = [
-            "Technology", "Healthcare", "Financials", "Consumer Discretionary",
-            "Communication Services", "Industrials", "Consumer Staples",
+            "Techn.", "Healthcare", "Financials", "Cons. Disc.",
+            "Comm. Services", "Industrials", "Cons. Staples",
             "Energy", "Materials", "Real Estate", "Utilities"
         ]
         
-        # Generate data centered around 100
-        base_spread = 40  # Initial spread for data generation
-        rel_strength = 100 + np.random.normal(0, base_spread/2, n_points)
-        rel_momentum = 100 + np.random.normal(0, base_spread/2, n_points)
+        # Generate different data based on analysis type
+        base_spread = 10  # Reduced spread for tighter data clustering around 100
+        if momentum_type == "rotation":
+            rel_strength = 100 + np.random.normal(0, base_spread/2, n_points)
+            rel_momentum = 100 + np.random.normal(0, base_spread/2, n_points)
+            x_title = "Relative Strength"
+            y_title = "Relative Momentum"
+            title_prefix = "Sector Rotation"
+        elif momentum_type == "performance":
+            rel_strength = 100 + np.random.normal(2, base_spread/3, n_points)  # Slight positive bias
+            rel_momentum = 100 + np.random.normal(1, base_spread/3, n_points)
+            x_title = "Standard Error"
+            y_title = "Relative Return"
+            title_prefix = "SPY Performance"
+        else:  # valuation
+            rel_strength = 100 + np.random.normal(-1, base_spread/3, n_points)  # Slight negative bias
+            rel_momentum = 100 + np.random.normal(0, base_spread/3, n_points)
+            x_title = "Relative P/E"
+            y_title = "Relative Growth"
+            title_prefix = "SPY Valuation"
+        
+        # Ensure values stay within desired range (90-110)
+        rel_strength = np.clip(rel_strength, 90, 110)
+        rel_momentum = np.clip(rel_momentum, 90, 110)
         
         # Calculate dynamic range based on actual data spread
-        strength_range = max(abs(rel_strength - 100).max(), 20)  # Minimum 20 points range
-        momentum_range = max(abs(rel_momentum - 100).max(), 20)  # Minimum 20 points range
-        range_percent = max(strength_range, momentum_range)
+        min_x = min(rel_strength)
+        max_x = max(rel_strength)
+        min_y = min(rel_momentum)
+        max_y = max(rel_momentum)
         
-        # Add padding and ensure minimum/maximum range
-        range_percent = range_percent * 1.2  # Add 20% padding
-        range_percent = max(range_percent, 20)  # Minimum range of 20
-        range_percent = min(range_percent, 40)  # Maximum range of 40
+        # Calculate the range needed for each axis independently
+        x_range = max(abs(max_x - 100), abs(100 - min_x))
+        y_range = max(abs(max_y - 100), abs(100 - min_y))
+        
+        # Add minimal padding
+        x_padding = x_range * 0.05  # 5% padding
+        y_padding = y_range * 0.05  # 5% padding
+        
+        # Calculate final ranges with padding, but cap at 10 units from 100
+        x_range_final = min(max(x_range + x_padding, 5), 10)
+        y_range_final = min(max(y_range + y_padding, 5), 10)
+        
+        # Calculate grid line spacing - use smaller increments
+        x_dtick = 2  # Show grid lines every 2 units
+        y_dtick = 2  # Show grid lines every 2 units
+        
+        # For label positioning, use consistent range for alignment
+        label_range = 10  # Fixed range for labels
+        label_offset = label_range * 0.85  # Move closer to the edges
         
         sizes = np.random.uniform(20, 50, n_points) if bubble_size == "equal" else np.random.uniform(20, 100, n_points)
         
@@ -804,6 +840,26 @@ def register_callbacks(app):
         fig.add_hline(y=100, line_dash="dash", line_color="gray", opacity=0.5)
         fig.add_vline(x=100, line_dash="dash", line_color="gray", opacity=0.5)
 
+        # Define colors for each quadrant
+        quadrant_colors = {
+            "leading": "#2ecc71",     # Green
+            "improving": "#3498db",    # Blue
+            "lagging": "#e74c3c",     # Red
+            "weakening": "#f1c40f"    # Yellow
+        }
+
+        # Assign colors based on quadrant position
+        colors = []
+        for x, y in zip(rel_strength, rel_momentum):
+            if x > 100 and y > 100:
+                colors.append(quadrant_colors["leading"])
+            elif x < 100 and y > 100:
+                colors.append(quadrant_colors["improving"])
+            elif x < 100 and y < 100:
+                colors.append(quadrant_colors["lagging"])
+            else:
+                colors.append(quadrant_colors["weakening"])
+
         # Add the scatter plot
         fig.add_trace(
             go.Scatter(
@@ -812,100 +868,109 @@ def register_callbacks(app):
                 mode="markers+text",
                 marker=dict(
                     size=sizes,
-                    color=rel_strength,  # Color based on relative strength
-                    colorscale="RdYlGn",  # Red to Green scale
-                    showscale=True,
-                    colorbar=dict(
-                        title="Relative Strength",
-                        thickness=20,
-                        len=0.5,
-                    ),
-                    cmin=100-range_percent,  # Set color scale range
-                    cmax=100+range_percent,
+                    color=colors,
                 ),
                 text=sectors,
-                textposition="top center",
+                textposition=["top center" if y > 100 else "bottom center" for y in rel_momentum],  # Dynamic text position
                 hovertemplate=(
                     "<b>%{text}</b><br>" +
-                    "Rel. Strength: %{x:.1f}<br>" +
-                    "Rel. Momentum: %{y:.1f}<br>" +
+                    f"{x_title}: %{{x:.1f}}<br>" +
+                    f"{y_title}: %{{y:.1f}}<br>" +
                     "<extra></extra>"
                 ),
             )
         )
 
-        # Calculate label positions - place them at 60% of the way from center to edge
-        label_offset = range_percent * 0.6
+        # Calculate label positions - place them in the corners
         if show_labels:
+            # Calculate horizontal positions at 25% and 75% of the range from center
+            left_x = 100 - (x_range_final * 0.75)  # 25% from left edge (or 75% from center)
+            right_x = 100 + (x_range_final * 0.75)  # 75% from left edge (or 75% from center)
+            # Use the same vertical spacing as before
+            top_y = 100 + (y_range_final * 0.85)
+            bottom_y = 100 - (y_range_final * 0.85)
+            
             quadrant_labels = [
                 dict(
-                    x=100+label_offset, y=100+label_offset,
-                    text="Leading<br>(Strong, Improving)",
+                    x=right_x, y=top_y,
+                    text="<b>LEADING</b>",
                     showarrow=False,
-                    font=dict(size=12),
-                    xanchor="center",
-                    yanchor="middle"
+                    font=dict(size=14, color=quadrant_colors["leading"], weight="bold"),
+                    xanchor="right",
+                    yanchor="bottom"
                 ),
                 dict(
-                    x=100-label_offset, y=100+label_offset,
-                    text="Improving<br>(Weak, Improving)",
+                    x=left_x, y=top_y,
+                    text="<b>IMPROVING</b>",
                     showarrow=False,
-                    font=dict(size=12),
-                    xanchor="center",
-                    yanchor="middle"
+                    font=dict(size=14, color=quadrant_colors["improving"], weight="bold"),
+                    xanchor="left",
+                    yanchor="bottom"
                 ),
                 dict(
-                    x=100-label_offset, y=100-label_offset,
-                    text="Lagging<br>(Weak, Weakening)",
+                    x=left_x, y=bottom_y,
+                    text="<b>LAGGING</b>",
                     showarrow=False,
-                    font=dict(size=12),
-                    xanchor="center",
-                    yanchor="middle"
+                    font=dict(size=14, color=quadrant_colors["lagging"], weight="bold"),
+                    xanchor="left",
+                    yanchor="top"
                 ),
                 dict(
-                    x=100+label_offset, y=100-label_offset,
-                    text="Weakening<br>(Strong, Weakening)",
+                    x=right_x, y=bottom_y,
+                    text="<b>WEAKENING</b>",
                     showarrow=False,
-                    font=dict(size=12),
-                    xanchor="center",
-                    yanchor="middle"
+                    font=dict(size=14, color=quadrant_colors["weakening"], weight="bold"),
+                    xanchor="right",
+                    yanchor="top"
                 ),
             ]
             fig.update_layout(annotations=quadrant_labels)
 
-        # Update layout with fixed, symmetric axes around 100
+        # Update layout with dynamic, independent axes around 100
         fig.update_layout(
-            title=f"S&P 500 Sector Relative Strength vs Momentum ({selected_period})",
+            title=f"S&P 500 {title_prefix} Analysis ({selected_period})",
             xaxis=dict(
-                title="Relative Strength",
+                title=x_title,
                 zeroline=False,
                 showgrid=True,
                 gridcolor="lightgray",
-                range=[100-range_percent, 100+range_percent],
-                dtick=20,  # Set major grid lines every 20 units
+                range=[100-x_range_final*1.1, 100+x_range_final*1.1],  # Add 10% extra range
+                dtick=x_dtick,  # Fewer grid lines
+                griddash="dot",  # Dotted grid lines
+                scaleanchor="y",  # Force square aspect ratio
+                scaleratio=1,
+                title_standoff=25,  # Increased space between axis and title
             ),
             yaxis=dict(
-                title="Relative Momentum",
+                title=y_title,
                 zeroline=False,
                 showgrid=True,
                 gridcolor="lightgray",
-                range=[100-range_percent, 100+range_percent],
-                scaleanchor="x",
-                scaleratio=1,
-                dtick=20,  # Set major grid lines every 20 units
+                range=[100-y_range_final*1.1, 100+y_range_final*1.1],  # Add 10% extra range
+                dtick=y_dtick,  # Fewer grid lines
+                griddash="dot",  # Dotted grid lines
+                title_standoff=25,  # Increased space between axis and title
             ),
             plot_bgcolor="white",
             showlegend=False,
-            margin=dict(l=50, r=50, t=50, b=50),  # Adjust margins for better layout
+            margin=dict(
+                l=120,   # Further increased left margin
+                r=120,   # Further increased right margin
+                t=120,   # Further increased top margin
+                b=120,   # Further increased bottom margin
+                pad=40   # Further increased padding between plot and axis labels
+            ),
+            autosize=True,  # Enable autosize
+            height=800,    # Fixed height
         )
 
-        # Calculate statistics
+        # Calculate statistics with colored text
         stats = []
-        for quadrant, (condition_x, condition_y, label) in enumerate([
-            (rel_strength > 100, rel_momentum > 100, "Leading"),
-            (rel_strength < 100, rel_momentum > 100, "Improving"),
-            (rel_strength < 100, rel_momentum < 100, "Lagging"),
-            (rel_strength > 100, rel_momentum < 100, "Weakening"),
+        for quadrant, (condition_x, condition_y, label, color) in enumerate([
+            (rel_strength > 100, rel_momentum > 100, "Leading", quadrant_colors["leading"]),
+            (rel_strength < 100, rel_momentum > 100, "Improving", quadrant_colors["improving"]),
+            (rel_strength < 100, rel_momentum < 100, "Lagging", quadrant_colors["lagging"]),
+            (rel_strength > 100, rel_momentum < 100, "Weakening", quadrant_colors["weakening"]),
         ]):
             mask = condition_x & condition_y
             count = np.sum(mask)
@@ -913,7 +978,7 @@ def register_callbacks(app):
             
             stats.append(
                 html.Div([
-                    html.Strong(f"{label}: {count}"),
+                    html.Strong(f"{label}: {count}", style={"color": color, "font-weight": "900"}),
                     html.Div(", ".join(sectors_in_quadrant) if sectors_in_quadrant else "None"),
                 ], className="mb-2")
             )
