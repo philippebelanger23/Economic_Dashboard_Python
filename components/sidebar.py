@@ -158,17 +158,6 @@ def create_funds_flow_sidebar():
                 html.H3("Visualization Settings", className="text-center mt-4"),
                 html.Div(
                     [
-                        html.Label("Analysis", className="mt-3"),
-                        dcc.Dropdown(
-                            id="funds-flow-momentum-type",
-                            options=[
-                                {"label": "Sector Rotation", "value": "rotation"},
-                                {"label": "Relative Performance", "value": "performance"},
-                                {"label": "Relative Valuation", "value": "valuation"},
-                            ],
-                            value="rotation",
-                            clearable=False,
-                        ),
                         dbc.Checklist(
                             options=[{"label": "Show Labels", "value": True}],
                             value=[True],
@@ -199,6 +188,19 @@ def create_funds_flow_sidebar():
             ],
             body=True,
             style={"width": "100%", "padding": "15px"},
+        ),
+        # Sector Statistics Card
+        dbc.Card(
+            [
+                dbc.CardHeader(
+                    html.H3("Sector Statistics", className="text-center m-0"),
+                ),
+                dbc.CardBody([
+                    html.Div(id="sector-stats-table"),
+                ]),
+            ],
+            className="mt-4",
+            style={"width": "100%"},
         ),
     ]
 

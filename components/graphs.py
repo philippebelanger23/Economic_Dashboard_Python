@@ -26,12 +26,13 @@ content = dbc.Container(
                     children=[
                         dbc.Row(
                             [
+                                # Top row with two graphs
                                 dbc.Col(
                                     [
-                                        # Main quadrant graph
+                                        # Sector Rotation Quadrant (Top Left)
                                         dcc.Graph(
-                                            id="funds-flow-quadrant",
-                                            style={"height": "70vh"},
+                                            id="sector-rotation-quadrant",
+                                            style={"height": "40vh"},
                                             config={
                                                 "displayModeBar": True,
                                                 "displaylogo": False,
@@ -41,37 +42,69 @@ content = dbc.Container(
                                                 ],
                                             },
                                         ),
-                                        # Legend and stats below the graph
-                                        dbc.Card(
-                                            dbc.CardBody([
-                                                html.H6("Quadrant Statistics", className="text-center"),
-                                                html.Div(id="funds-flow-stats"),
-                                            ]),
-                                            className="mt-3",
+                                    ],
+                                    width=6,
+                                ),
+                                dbc.Col(
+                                    [
+                                        # Volume Analysis (Top Right)
+                                        dcc.Graph(
+                                            id="volume-analysis",
+                                            style={"height": "40vh"},
+                                            config={
+                                                "displayModeBar": True,
+                                                "displaylogo": False,
+                                            },
                                         ),
                                     ],
-                                    width=12,
+                                    width=6,
                                 ),
                             ],
                             style={"margin-top": "10px"},
-                        )
+                        ),
+                        dbc.Row(
+                            [
+                                # Bottom row with two graphs
+                                dbc.Col(
+                                    [
+                                        # Relative Performance (Bottom Left)
+                                        dcc.Graph(
+                                            id="relative-performance",
+                                            style={"height": "40vh"},
+                                            config={
+                                                "displayModeBar": True,
+                                                "displaylogo": False,
+                                            },
+                                        ),
+                                    ],
+                                    width=6,
+                                ),
+                                dbc.Col(
+                                    [
+                                        # Relative Valuation (Bottom Right)
+                                        dcc.Graph(
+                                            id="relative-valuation",
+                                            style={"height": "40vh"},
+                                            config={
+                                                "displayModeBar": True,
+                                                "displaylogo": False,
+                                            },
+                                        ),
+                                    ],
+                                    width=6,
+                                ),
+                            ],
+                            style={"margin-top": "10px"},
+                        ),
                     ],
                 ),
                 dcc.Tab(
-                    label="News Feed",
+                    label="News",
                     value="tab-news",
-                    children=[
-                        dbc.Row(
-                            [
-                                dbc.Col(rss_news, width=12),
-                            ],
-                            style={"margin-top": "10px"},
-                        )
-                    ],
+                    children=[rss_news],
                 ),
             ],
-            style={"margin-top": "10px"},
-        )
+        ),
     ],
     fluid=True,
 )

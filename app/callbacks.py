@@ -684,163 +684,38 @@ def register_callbacks(app):
         period_info = period_descriptions.get(selected_period, selected_period)
         
         return selected_period, period_info
-        
-    @app.callback(
-        Output("funds-flow-container", "children"),
-        [
-            Input("dashboard-tabs", "value"),
-            Input("funds-flow-selected-period", "data")
-        ]
-    )
-    def update_funds_flow(current_tab, selected_period):
-        # Only proceed if we're on the funds flow tab
-        if current_tab != "tab-funds-flow":
-            raise PreventUpdate
-            
-        # Handle the case when no period is selected
-        if not selected_period:
-            selected_period = "12W"  # Default to 12 weeks
-            
-        # Return a placeholder message with the selected period
-        return html.Div(
-            [
-                html.H3("Funds Flow Analysis", className="text-center mb-4"),
-                html.H5(f"Selected Period: {selected_period}", className="text-center mb-3"),
-                html.P("The visualization for this tab is being built.", className="text-center")
-            ],
-            style={"padding": "20px", "margin-top": "50px"}
-        )
 
     @app.callback(
         [
-            Output("btn-period-4w", "color"),
-            Output("btn-period-8w", "color"),
-            Output("btn-period-12w", "color"),
-            Output("btn-period-26w", "color"),
-            Output("btn-period-39w", "color"),
-            Output("btn-period-52w", "color"),
-            Output("btn-period-4w", "outline"),
-            Output("btn-period-8w", "outline"),
-            Output("btn-period-12w", "outline"),
-            Output("btn-period-26w", "outline"),
-            Output("btn-period-39w", "outline"),
-            Output("btn-period-52w", "outline"),
-        ],
-        Input("funds-flow-selected-period", "data")
-    )
-    def update_period_button_styles(selected_period):
-        colors = ["primary"] * 6
-        outlines = [True] * 6
-        
-        if not selected_period:
-            selected_period = "12W"
-        
-        button_indices = {
-            "4W": 0, "8W": 1, "12W": 2,
-            "26W": 3, "39W": 4, "52W": 5
-        }
-        
-        if selected_period in button_indices:
-            idx = button_indices[selected_period]
-            outlines[idx] = False
-        
-        return (
-            colors[0], colors[1], colors[2], colors[3], colors[4], colors[5],
-            outlines[0], outlines[1], outlines[2], outlines[3], outlines[4], outlines[5]
-        )
-
-    @app.callback(
-        [
-            Output("funds-flow-quadrant", "figure"),
-            Output("funds-flow-stats", "children"),
+            Output("sector-rotation-quadrant", "figure"),
+            Output("volume-analysis", "figure"),
+            Output("relative-performance", "figure"),
+            Output("relative-valuation", "figure"),
+            Output("sector-stats-table", "children"),
         ],
         [
             Input("funds-flow-selected-period", "data"),
-            Input("funds-flow-momentum-type", "value"),
             Input("funds-flow-show-labels", "value"),
             Input("funds-flow-show-trends", "value"),
             Input("funds-flow-bubble-size", "value"),
         ]
     )
-    def update_funds_flow_quadrant(
+    def update_sector_analysis(
         selected_period,
-        momentum_type,
         show_labels,
         show_trends,
         bubble_size,
     ):
-        # For now, create sample data (replace with real data later)
-        np.random.seed(None)  # Allow random data each time
-        n_points = 11  # 11 sectors in S&P 500
-        
-        # Sample data
+        # Sample data for all sectors
         sectors = [
-            "Techn.", "Healthcare", "Financials", "Cons. Disc.",
+            "Technology", "Healthcare", "Financials", "Cons. Disc.",
             "Comm. Services", "Industrials", "Cons. Staples",
             "Energy", "Materials", "Real Estate", "Utilities"
         ]
-        
-        # Generate different data based on analysis type
-        base_spread = 10  # Reduced spread for tighter data clustering around 100
-        if momentum_type == "rotation":
-            rel_strength = 100 + np.random.normal(0, base_spread/2, n_points)
-            rel_momentum = 100 + np.random.normal(0, base_spread/2, n_points)
-            x_title = "Relative Strength"
-            y_title = "Relative Momentum"
-            title_prefix = "Sector Rotation"
-        elif momentum_type == "performance":
-            rel_strength = 100 + np.random.normal(2, base_spread/3, n_points)  # Slight positive bias
-            rel_momentum = 100 + np.random.normal(1, base_spread/3, n_points)
-            x_title = "Standard Error"
-            y_title = "Relative Return"
-            title_prefix = "SPY Performance"
-        else:  # valuation
-            rel_strength = 100 + np.random.normal(-1, base_spread/3, n_points)  # Slight negative bias
-            rel_momentum = 100 + np.random.normal(0, base_spread/3, n_points)
-            x_title = "Relative P/E"
-            y_title = "Relative Growth"
-            title_prefix = "SPY Valuation"
-        
-        # Ensure values stay within desired range (90-110)
-        rel_strength = np.clip(rel_strength, 90, 110)
-        rel_momentum = np.clip(rel_momentum, 90, 110)
-        
-        # Calculate dynamic range based on actual data spread
-        min_x = min(rel_strength)
-        max_x = max(rel_strength)
-        min_y = min(rel_momentum)
-        max_y = max(rel_momentum)
-        
-        # Calculate the range needed for each axis independently
-        x_range = max(abs(max_x - 100), abs(100 - min_x))
-        y_range = max(abs(max_y - 100), abs(100 - min_y))
-        
-        # Add minimal padding
-        x_padding = x_range * 0.05  # 5% padding
-        y_padding = y_range * 0.05  # 5% padding
-        
-        # Calculate final ranges with padding, but cap at 10 units from 100
-        x_range_final = min(max(x_range + x_padding, 5), 10)
-        y_range_final = min(max(y_range + y_padding, 5), 10)
-        
-        # Calculate grid line spacing - use smaller increments
-        x_dtick = 2  # Show grid lines every 2 units
-        y_dtick = 2  # Show grid lines every 2 units
-        
-        # For label positioning, use consistent range for alignment
-        label_range = 10  # Fixed range for labels
-        label_offset = label_range * 0.85  # Move closer to the edges
-        
-        sizes = np.random.uniform(20, 50, n_points) if bubble_size == "equal" else np.random.uniform(20, 100, n_points)
-        
-        # Create the scatter plot
-        fig = go.Figure()
+        n_points = len(sectors)
+        np.random.seed(42)  # For reproducible sample data
 
-        # Add quadrant lines at 100
-        fig.add_hline(y=100, line_dash="dash", line_color="gray", opacity=0.5)
-        fig.add_vline(x=100, line_dash="dash", line_color="gray", opacity=0.5)
-
-        # Define colors for each quadrant
+        # Common styling
         quadrant_colors = {
             "leading": "#2ecc71",     # Green
             "improving": "#3498db",    # Blue
@@ -848,139 +723,470 @@ def register_callbacks(app):
             "weakening": "#f1c40f"    # Yellow
         }
 
-        # Assign colors based on quadrant position
-        colors = []
-        for x, y in zip(rel_strength, rel_momentum):
-            if x > 100 and y > 100:
-                colors.append(quadrant_colors["leading"])
-            elif x < 100 and y > 100:
-                colors.append(quadrant_colors["improving"])
-            elif x < 100 and y < 100:
-                colors.append(quadrant_colors["lagging"])
-            else:
-                colors.append(quadrant_colors["weakening"])
+        # Generate all the data we need
+        # Rotation data
+        rel_strength = 100 + np.random.normal(0, 5, n_points)
+        rel_momentum = 100 + np.random.normal(0, 5, n_points)
+        
+        # Volume data
+        volume_ratios = np.random.normal(1, 0.3, n_points)
+        
+        # Performance data
+        returns = np.random.normal(0.08, 0.15, n_points)
+        volatility = np.random.normal(0.2, 0.1, n_points)
+        rf_rate = 0.02
+        sharpe_ratios = (returns - rf_rate) / volatility
+        
+        # Valuation data
+        pe_ratios = np.random.normal(20, 5, n_points)
+        growth_rates = np.random.normal(0.1, 0.05, n_points)
+        market_caps = np.random.uniform(1000, 10000, n_points)
+        peg_ratios = pe_ratios / (growth_rates * 100)
 
-        # Add the scatter plot
-        fig.add_trace(
-            go.Scatter(
-                x=rel_strength,
-                y=rel_momentum,
-                mode="markers+text",
-                marker=dict(
-                    size=sizes,
-                    color=colors,
-                ),
-                text=sectors,
-                textposition=["top center" if y > 100 else "bottom center" for y in rel_momentum],  # Dynamic text position
-                hovertemplate=(
-                    "<b>%{text}</b><br>" +
-                    f"{x_title}: %{{x:.1f}}<br>" +
-                    f"{y_title}: %{{y:.1f}}<br>" +
-                    "<extra></extra>"
-                ),
-            )
+        # Create the figures
+        rotation_fig = create_rotation_quadrant(sectors, show_labels, quadrant_colors, selected_period, rel_strength, rel_momentum)
+        volume_fig = create_volume_analysis(sectors, selected_period, volume_ratios)
+        performance_fig = create_performance_scatter(sectors, selected_period, returns, volatility, market_caps, sharpe_ratios)
+        valuation_fig = create_valuation_bubble(sectors, selected_period, pe_ratios, growth_rates, market_caps, peg_ratios)
+
+        # Create unified statistics table
+        stats_table = create_unified_stats_table(
+            sectors,
+            rel_strength, rel_momentum, volume_ratios,
+            returns, volatility, sharpe_ratios,
+            pe_ratios, growth_rates, peg_ratios, market_caps,
+            quadrant_colors
         )
 
-        # Calculate label positions - place them in the corners
-        if show_labels:
-            # Calculate horizontal positions at 25% and 75% of the range from center
-            left_x = 100 - (x_range_final * 0.75)  # 25% from left edge (or 75% from center)
-            right_x = 100 + (x_range_final * 0.75)  # 75% from left edge (or 75% from center)
-            # Use the same vertical spacing as before
-            top_y = 100 + (y_range_final * 0.85)
-            bottom_y = 100 - (y_range_final * 0.85)
-            
-            quadrant_labels = [
-                dict(
-                    x=right_x, y=top_y,
-                    text="<b>LEADING</b>",
-                    showarrow=False,
-                    font=dict(size=14, color=quadrant_colors["leading"], weight="bold"),
-                    xanchor="right",
-                    yanchor="bottom"
-                ),
-                dict(
-                    x=left_x, y=top_y,
-                    text="<b>IMPROVING</b>",
-                    showarrow=False,
-                    font=dict(size=14, color=quadrant_colors["improving"], weight="bold"),
-                    xanchor="left",
-                    yanchor="bottom"
-                ),
-                dict(
-                    x=left_x, y=bottom_y,
-                    text="<b>LAGGING</b>",
-                    showarrow=False,
-                    font=dict(size=14, color=quadrant_colors["lagging"], weight="bold"),
-                    xanchor="left",
-                    yanchor="top"
-                ),
-                dict(
-                    x=right_x, y=bottom_y,
-                    text="<b>WEAKENING</b>",
-                    showarrow=False,
-                    font=dict(size=14, color=quadrant_colors["weakening"], weight="bold"),
-                    xanchor="right",
-                    yanchor="top"
-                ),
-            ]
-            fig.update_layout(annotations=quadrant_labels)
+        return rotation_fig, volume_fig, performance_fig, valuation_fig, stats_table
 
-        # Update layout with dynamic, independent axes around 100
-        fig.update_layout(
-            title=f"S&P 500 {title_prefix} Analysis ({selected_period})",
-            xaxis=dict(
-                title=x_title,
-                zeroline=False,
-                showgrid=True,
-                gridcolor="lightgray",
-                range=[100-x_range_final*1.1, 100+x_range_final*1.1],  # Add 10% extra range
-                dtick=x_dtick,  # Fewer grid lines
-                griddash="dot",  # Dotted grid lines
-                scaleanchor="y",  # Force square aspect ratio
-                scaleratio=1,
-                title_standoff=25,  # Increased space between axis and title
-            ),
-            yaxis=dict(
-                title=y_title,
-                zeroline=False,
-                showgrid=True,
-                gridcolor="lightgray",
-                range=[100-y_range_final*1.1, 100+y_range_final*1.1],  # Add 10% extra range
-                dtick=y_dtick,  # Fewer grid lines
-                griddash="dot",  # Dotted grid lines
-                title_standoff=25,  # Increased space between axis and title
-            ),
-            plot_bgcolor="white",
-            showlegend=False,
-            margin=dict(
-                l=120,   # Further increased left margin
-                r=120,   # Further increased right margin
-                t=120,   # Further increased top margin
-                b=120,   # Further increased bottom margin
-                pad=40   # Further increased padding between plot and axis labels
-            ),
-            autosize=True,  # Enable autosize
-            height=800,    # Fixed height
+def create_rotation_volume_stats(sectors, rel_strength, rel_momentum, volume_ratios, quadrant_colors):
+    stats = []
+    
+    # Sort sectors by overall strength (combination of momentum and strength)
+    overall_scores = rel_strength + rel_momentum
+    sorted_indices = np.argsort(overall_scores)[::-1]  # Descending order
+    
+    for idx in sorted_indices:
+        sector = sectors[idx]
+        strength = rel_strength[idx]
+        momentum = rel_momentum[idx]
+        volume = volume_ratios[idx]
+        
+        # Determine quadrant and color
+        if momentum > 100 and strength > 100:
+            quadrant = "Leading"
+            color = quadrant_colors["leading"]
+        elif momentum > 100 and strength <= 100:
+            quadrant = "Improving"
+            color = quadrant_colors["improving"]
+        elif momentum <= 100 and strength <= 100:
+            quadrant = "Lagging"
+            color = quadrant_colors["lagging"]
+        else:
+            quadrant = "Weakening"
+            color = quadrant_colors["weakening"]
+        
+        # Create volume indicator
+        volume_indicator = "↑" if volume > 1 else "↓"
+        volume_color = "#2ecc71" if volume > 1 else "#e74c3c"
+        
+        stats.append(
+            html.Div([
+                html.Strong(f"{sector}: ", style={"color": color}),
+                html.Span([
+                    f"{quadrant} ",
+                    html.Span(f"({volume_indicator} {abs(volume-1):+.1%})", 
+                             style={"color": volume_color}),
+                ]),
+            ], className="mb-1")
         )
+    
+    return stats
 
-        # Calculate statistics with colored text
-        stats = []
-        for quadrant, (condition_x, condition_y, label, color) in enumerate([
-            (rel_strength > 100, rel_momentum > 100, "Leading", quadrant_colors["leading"]),
-            (rel_strength < 100, rel_momentum > 100, "Improving", quadrant_colors["improving"]),
-            (rel_strength < 100, rel_momentum < 100, "Lagging", quadrant_colors["lagging"]),
-            (rel_strength > 100, rel_momentum < 100, "Weakening", quadrant_colors["weakening"]),
-        ]):
-            mask = condition_x & condition_y
-            count = np.sum(mask)
-            sectors_in_quadrant = [s for s, m in zip(sectors, mask) if m]
-            
-            stats.append(
-                html.Div([
-                    html.Strong(f"{label}: {count}", style={"color": color, "font-weight": "900"}),
-                    html.Div(", ".join(sectors_in_quadrant) if sectors_in_quadrant else "None"),
-                ], className="mb-2")
+def create_performance_stats(sectors, returns, volatility, sharpe_ratios):
+    stats = []
+    
+    # Sort sectors by Sharpe ratio
+    sorted_indices = np.argsort(sharpe_ratios)[::-1]  # Descending order
+    
+    for idx in sorted_indices:
+        sector = sectors[idx]
+        ret = returns[idx]
+        vol = volatility[idx]
+        sharpe = sharpe_ratios[idx]
+        
+        # Color based on Sharpe ratio
+        if sharpe > 1:
+            color = "#2ecc71"  # Green
+        elif sharpe > 0:
+            color = "#f1c40f"  # Yellow
+        else:
+            color = "#e74c3c"  # Red
+        
+        stats.append(
+            html.Div([
+                html.Strong(f"{sector}: ", style={"color": color}),
+                html.Span(f"Return: {ret:+.1%}, Vol: {vol:.1%}, Sharpe: {sharpe:.2f}"),
+            ], className="mb-1")
+        )
+    
+    return stats
+
+def create_valuation_stats(sectors, pe_ratios, growth_rates, peg_ratios, market_caps):
+    stats = []
+    
+    # Sort sectors by PEG ratio (lower is better)
+    sorted_indices = np.argsort(peg_ratios)  # Ascending order
+    
+    for idx in sorted_indices:
+        sector = sectors[idx]
+        pe = pe_ratios[idx]
+        growth = growth_rates[idx]
+        peg = peg_ratios[idx]
+        mcap = market_caps[idx]
+        
+        # Color based on PEG ratio
+        if peg < 1:
+            color = "#2ecc71"  # Green - undervalued
+        elif peg < 2:
+            color = "#f1c40f"  # Yellow - fair valued
+        else:
+            color = "#e74c3c"  # Red - overvalued
+        
+        stats.append(
+            html.Div([
+                html.Strong(f"{sector}: ", style={"color": color}),
+                html.Span([
+                    f"P/E: {pe:.1f}, Growth: {growth:+.1%}, ",
+                    html.Strong(f"PEG: {peg:.2f}"),
+                    f" (${mcap/1000:.1f}B)",
+                ]),
+            ], className="mb-1")
+        )
+    
+    return stats
+
+def create_rotation_quadrant(sectors, show_labels, quadrant_colors, selected_period, rel_strength, rel_momentum):
+    # Create the scatter plot
+    fig = go.Figure()
+
+    # Add quadrant lines
+    fig.add_hline(y=100, line_dash="dash", line_color="gray", opacity=0.5)
+    fig.add_vline(x=100, line_dash="dash", line_color="gray", opacity=0.5)
+
+    # Assign colors based on quadrant position
+    colors = []
+    for x, y in zip(rel_strength, rel_momentum):
+        if x > 100 and y > 100:
+            colors.append(quadrant_colors["leading"])
+        elif x < 100 and y > 100:
+            colors.append(quadrant_colors["improving"])
+        elif x < 100 and y < 100:
+            colors.append(quadrant_colors["lagging"])
+        else:
+            colors.append(quadrant_colors["weakening"])
+
+    # Add scatter plot
+    fig.add_trace(
+        go.Scatter(
+            x=rel_strength,
+            y=rel_momentum,
+            mode="markers+text",
+            marker=dict(
+                size=15,
+                color=colors,
+            ),
+            text=sectors,
+            textposition=["top center" if y > 100 else "bottom center" for y in rel_momentum],
+            hovertemplate=(
+                "<b>%{text}</b><br>" +
+                "Relative Strength: %{x:.1f}<br>" +
+                "Relative Momentum: %{y:.1f}<br>" +
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    # Add quadrant labels if enabled
+    if show_labels:
+        for pos, label, color in [
+            ({"x": 105, "y": 105}, "LEADING", quadrant_colors["leading"]),
+            ({"x": 95, "y": 105}, "IMPROVING", quadrant_colors["improving"]),
+            ({"x": 95, "y": 95}, "LAGGING", quadrant_colors["lagging"]),
+            ({"x": 105, "y": 95}, "WEAKENING", quadrant_colors["weakening"]),
+        ]:
+            fig.add_annotation(
+                x=pos["x"],
+                y=pos["y"],
+                text=f"<b>{label}</b>",
+                showarrow=False,
+                font=dict(size=14, color=color),
             )
 
-        return fig, html.Div(stats)
+    fig.update_layout(
+        title=f"Sector Rotation ({selected_period})",
+        xaxis=dict(
+            title="Relative Strength",
+            range=[90, 110],
+            showgrid=True,
+            gridcolor="lightgray",
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="Relative Momentum",
+            range=[90, 110],
+            showgrid=True,
+            gridcolor="lightgray",
+            zeroline=False,
+        ),
+        plot_bgcolor="white",
+        showlegend=False,
+    )
+
+    return fig
+
+def create_volume_analysis(sectors, selected_period, volume_ratios):
+    # Sort sectors by volume ratio
+    sorted_indices = np.argsort(volume_ratios)
+    sorted_sectors = [sectors[i] for i in sorted_indices]
+    sorted_ratios = volume_ratios[sorted_indices]
+    
+    # Color based on whether volume is above or below average
+    colors = ['#2ecc71' if ratio > 1 else '#e74c3c' for ratio in sorted_ratios]
+
+    fig = go.Figure()
+    
+    # Add horizontal bars
+    fig.add_trace(
+        go.Bar(
+            x=sorted_ratios,
+            y=sorted_sectors,
+            orientation='h',
+            marker_color=colors,
+            hovertemplate=(
+                "<b>%{y}</b><br>" +
+                "Volume Ratio: %{x:.2f}x<br>" +
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    # Add reference line at 1.0 (average)
+    fig.add_vline(x=1, line_dash="dash", line_color="gray")
+
+    fig.update_layout(
+        title=f"Volume Analysis ({selected_period})",
+        xaxis=dict(
+            title="Volume Ratio (Current/50d Avg)",
+            showgrid=True,
+            gridcolor="lightgray",
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="",
+            showgrid=False,
+            zeroline=False,
+        ),
+        plot_bgcolor="white",
+        showlegend=False,
+    )
+
+    return fig
+
+def create_performance_scatter(sectors, selected_period, returns, volatility, market_caps, sharpe_ratios):
+    # Create color scale based on Sharpe ratio
+    colors = [
+        f'rgb({int(255 * (1 - ratio))}, {int(255 * ratio)}, 0)'
+        for ratio in np.clip((sharpe_ratios - min(sharpe_ratios)) / (max(sharpe_ratios) - min(sharpe_ratios)), 0, 1)
+    ]
+
+    fig = go.Figure()
+
+    # Add scatter plot
+    fig.add_trace(
+        go.Scatter(
+            x=volatility,
+            y=returns,
+            mode="markers+text",
+            marker=dict(
+                size=np.sqrt(market_caps/100),  # Scale market caps for reasonable bubble sizes
+                color=colors,
+                showscale=True,
+                colorbar=dict(
+                    title="Sharpe Ratio",
+                ),
+            ),
+            text=sectors,
+            textposition="top center",
+            hovertemplate=(
+                "<b>%{text}</b><br>" +
+                "Return: %{y:.1%}<br>" +
+                "Volatility: %{x:.1%}<br>" +
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    # Add reference lines at market averages
+    fig.add_hline(y=np.mean(returns), line_dash="dash", line_color="gray")
+    fig.add_vline(x=np.mean(volatility), line_dash="dash", line_color="gray")
+
+    fig.update_layout(
+        title=f"Risk-Return Analysis ({selected_period})",
+        xaxis=dict(
+            title="Volatility (Annualized)",
+            showgrid=True,
+            gridcolor="lightgray",
+            zeroline=False,
+            tickformat=".0%",
+        ),
+        yaxis=dict(
+            title="Return",
+            showgrid=True,
+            gridcolor="lightgray",
+            zeroline=False,
+            tickformat=".0%",
+        ),
+        plot_bgcolor="white",
+    )
+
+    return fig
+
+def create_valuation_bubble(sectors, selected_period, pe_ratios, growth_rates, market_caps, peg_ratios):
+    # Create color scale based on PEG ratio (lower is better)
+    colors = [
+        f'rgb({int(255 * ratio)}, {int(255 * (1 - ratio))}, 0)'
+        for ratio in np.clip((peg_ratios - min(peg_ratios)) / (max(peg_ratios) - min(peg_ratios)), 0, 1)
+    ]
+
+    fig = go.Figure()
+
+    # Add bubble plot
+    fig.add_trace(
+        go.Scatter(
+            x=pe_ratios,
+            y=growth_rates,
+            mode="markers+text",
+            marker=dict(
+                size=np.sqrt(market_caps/100),  # Scale market caps for reasonable bubble sizes
+                color=colors,
+                showscale=True,
+                colorbar=dict(
+                    title="PEG Ratio",
+                ),
+            ),
+            text=sectors,
+            textposition="top center",
+            hovertemplate=(
+                "<b>%{text}</b><br>" +
+                "P/E Ratio: %{x:.1f}<br>" +
+                "Growth Rate: %{y:.1%}<br>" +
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    # Add reference lines at market averages
+    fig.add_hline(y=np.mean(growth_rates), line_dash="dash", line_color="gray")
+    fig.add_vline(x=np.mean(pe_ratios), line_dash="dash", line_color="gray")
+
+    fig.update_layout(
+        title=f"Valuation Analysis ({selected_period})",
+        xaxis=dict(
+            title="P/E Ratio",
+            showgrid=True,
+            gridcolor="lightgray",
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="Growth Rate",
+            showgrid=True,
+            gridcolor="lightgray",
+            zeroline=False,
+            tickformat=".0%",
+        ),
+        plot_bgcolor="white",
+    )
+
+    return fig
+
+def create_unified_stats_table(
+    sectors,
+    rel_strength, rel_momentum, volume_ratios,
+    returns, volatility, sharpe_ratios,
+    pe_ratios, growth_rates, peg_ratios, market_caps,
+    quadrant_colors
+):
+    # Create table header with centered text
+    header = html.Thead(html.Tr([
+        html.Th("Sector", style={"width": "20%", "text-align": "center"}),
+        html.Th("Rotation", style={"width": "20%", "text-align": "center"}),
+        html.Th("Volume", style={"width": "20%", "text-align": "center"}),
+        html.Th("Risk Adj Perf", style={"width": "20%", "text-align": "center"}),
+        html.Th("Valuation", style={"width": "20%", "text-align": "center"}),
+    ]))
+
+    rows = []
+    for i, sector in enumerate(sectors):
+        # Rotation data
+        strength = rel_strength[i]
+        momentum = rel_momentum[i]
+        
+        # Determine quadrant and color
+        if momentum > 100 and strength > 100:
+            quadrant = "Leading"
+            color = quadrant_colors["leading"]
+        elif momentum > 100 and strength <= 100:
+            quadrant = "Improving"
+            color = quadrant_colors["improving"]
+        elif momentum <= 100 and strength <= 100:
+            quadrant = "Lagging"
+            color = quadrant_colors["lagging"]
+        else:
+            quadrant = "Weakening"
+            color = quadrant_colors["weakening"]
+        
+        # Volume data
+        volume = volume_ratios[i]
+        volume_change = f"{abs(volume-1):+.1%}"
+        
+        # Performance data
+        sharpe = sharpe_ratios[i]
+        
+        # Valuation data
+        peg = peg_ratios[i]
+
+        row = html.Tr([
+            # Sector name (centered)
+            html.Td(html.Strong(sector), style={"text-align": "center"}),
+            
+            # Rotation (with color, centered)
+            html.Td(html.Span(quadrant, style={"color": color}), style={"text-align": "center"}),
+            
+            # Volume (centered)
+            html.Td(volume_change, style={"text-align": "center"}),
+            
+            # Performance (centered)
+            html.Td(f"{sharpe:.2f}", style={"text-align": "center"}),
+            
+            # Valuation (centered)
+            html.Td(f"{peg:.2f}", style={"text-align": "center"}),
+        ])
+        rows.append(row)
+    
+    # Create table body
+    body = html.Tbody(rows)
+    
+    # Create table with Bootstrap styling
+    table = dbc.Table(
+        [header, body],
+        bordered=True,
+        hover=True,
+        responsive=True,
+        striped=True,
+        size="sm",
+        style={"fontSize": "0.85rem"},
+    )
+    
+    return table
