@@ -554,15 +554,18 @@ def register_callbacks(app):
 
     @app.callback(
         Output({"type": "news-list", "feed": ALL}, "children"),
-        [Input({"type": "refresh-button", "feed": ALL}, "n_clicks")],
+        [
+            Input("refresh-all-feeds", "n_clicks"),
+            Input("articles-per-feed", "value")
+        ],
         prevent_initial_call=False
     )
-    def update_all_rss_news(n_clicks):
+    def update_all_rss_news(n_clicks, articles_per_feed):
         feeds = list(RSS_FEED_URLS.keys())
         all_news_lists = []
         
         for feed_key in feeds:
-            articles = fetch_rss_feed(RSS_FEED_URLS[feed_key])
+            articles = fetch_rss_feed(RSS_FEED_URLS[feed_key], num_articles=articles_per_feed)
             if not articles:
                 news_list = [html.Li("Failed to load articles.", style={"color": "red"})]
             else:
@@ -595,7 +598,7 @@ def register_callbacks(app):
                             )
                         ]
                     )
-                    for article in articles
+                    for article in articles  # No need to slice since fetch_rss_feed already limits
                 ]
             all_news_lists.append(news_list)
         

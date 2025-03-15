@@ -11,24 +11,7 @@ def create_news_card(feed_key):
     return dbc.Card(
         [
             dbc.CardHeader(
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            html.H6(feed_key, className="mb-0", style={"fontSize": "0.9rem"}),
-                            width=9,
-                        ),
-                        dbc.Col(
-                            html.Button(
-                                "↻",  # Unicode refresh symbol
-                                id={"type": "refresh-button", "feed": feed_key},
-                                className="btn btn-primary btn-sm",
-                                style={"width": "100%", "padding": "2px", "fontSize": "0.8rem"},
-                            ),
-                            width=3,
-                        ),
-                    ],
-                    align="center",
-                ),
+                html.H6(feed_key, className="mb-0", style={"fontSize": "0.9rem"}),
                 style={"padding": "5px"},
                 className="bg-light",
             ),
@@ -44,26 +27,30 @@ def create_news_card(feed_key):
                 ),
                 style={
                     "padding": "8px",
-                    "height": "400px",
-                    "overflow-y": "auto"
+                    "height": "auto"  # Let content determine the height
                 },
             ),
         ],
-        style={"height": "100%"},
-        className="h-100 shadow-sm",
+        style={
+            "height": "auto",
+            "display": "flex",
+            "flexDirection": "column"
+        },
+        className="shadow-sm",  # Removed h-100 to allow natural height
     )
 
-# Create a grid of news cards (3 columns)
+# Create a grid of news cards (3 columns, 2 rows)
 news_cards = []
 row = []
 for i, feed_key in enumerate(RSS_FEED_URLS.keys(), 1):
     row.append(dbc.Col(create_news_card(feed_key), width=4))
-    if i % 3 == 0 or i == len(RSS_FEED_URLS):
-        # Fill the last row with empty columns if needed
-        while len(row) < 3 and i == len(RSS_FEED_URLS):
-            row.append(dbc.Col(width=4))
+    if i % 3 == 0:
         news_cards.append(dbc.Row(row, style={"margin-bottom": MARGIN_BETWEEN_CARDS}))
         row = []
+
+# Add any remaining cards
+if row:
+    news_cards.append(dbc.Row(row, style={"margin-bottom": MARGIN_BETWEEN_CARDS}))
 
 # Define the RSS container with all feeds
 rss_news = html.Div(

@@ -3,7 +3,7 @@ import pandas as pd
 from fredapi import Fred
 from tenacity import retry, stop_after_attempt, wait_fixed
 import feedparser
-from config.settings import FRED_API_KEY, BASE_DIR, RSS_FEED_URLS, NUM_ARTICLES
+from config.settings import FRED_API_KEY, BASE_DIR, RSS_FEED_URLS
 from datetime import datetime
 import json
 import time
@@ -112,12 +112,13 @@ def fetch_fred_data(force_refresh=False):
     return df
 
 
-def fetch_rss_feed(url):
+def fetch_rss_feed(url, num_articles=5):
     """
     Fetch and return the latest RSS feed articles from the specified URL.
 
     Parameters:
         url (str): The URL of the RSS feed.
+        num_articles (int): Number of articles to return (default: 5)
 
     Returns:
         list: A list of dictionaries, each containing the title, link, publication date, and summary.
@@ -130,7 +131,7 @@ def fetch_rss_feed(url):
             return []
 
         articles = []
-        for entry in feed.entries[:NUM_ARTICLES]:
+        for entry in feed.entries[:num_articles]:
             pub_date = entry.get("published", "") or entry.get("updated", "Unknown")
             if pub_date and pub_date != "Unknown":
                 try:
