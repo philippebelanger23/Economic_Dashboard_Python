@@ -685,83 +685,6 @@ def register_callbacks(app):
         
         return selected_period, period_info
 
-    @app.callback(
-        [
-            Output("sector-rotation-quadrant", "figure"),
-            Output("volume-analysis", "figure"),
-            Output("relative-performance", "figure"),
-            Output("relative-valuation", "figure"),
-            Output("sector-stats-table", "children"),
-        ],
-        [
-            Input("funds-flow-selected-period", "data"),
-            Input("funds-flow-show-labels", "value"),
-            Input("funds-flow-show-trends", "value"),
-            Input("funds-flow-bubble-size", "value"),
-        ]
-    )
-    def update_sector_analysis(
-        selected_period,
-        show_labels,
-        show_trends,
-        bubble_size,
-    ):
-        # Sample data for all sectors
-        sectors = [
-            "Technology", "Healthcare", "Financials", "Cons. Disc.",
-            "Comm. Services", "Industrials", "Cons. Staples",
-            "Energy", "Materials", "Real Estate", "Utilities"
-        ]
-        n_points = len(sectors)
-        
-        # Generate fresh random data each time with current timestamp as seed
-        np.random.seed(int(datetime.now().timestamp()))
-
-        # Common styling
-        quadrant_colors = {
-            "leading": "#2ecc71",     # Green
-            "improving": "#3498db",    # Blue
-            "lagging": "#e74c3c",     # Red
-            "weakening": "#f1c40f"    # Yellow
-        }
-
-        # Generate all the data we need with more variation
-        # Rotation data - more spread for better visualization
-        rel_strength = 100 + np.random.normal(0, 8, n_points)  # Increased std from 5 to 8
-        rel_momentum = 100 + np.random.normal(0, 8, n_points)  # Increased std from 5 to 8
-        
-        # Volume data - more variation
-        volume_ratios = np.random.normal(1, 0.5, n_points)  # Increased std from 0.3 to 0.5
-        
-        # Performance data - more realistic ranges
-        returns = np.random.normal(0.10, 0.20, n_points)  # Increased variation
-        volatility = np.random.normal(0.25, 0.15, n_points)  # Increased variation
-        rf_rate = 0.02
-        sharpe_ratios = (returns - rf_rate) / volatility
-        
-        # Valuation data - more spread
-        pe_ratios = np.random.normal(25, 10, n_points)  # Increased std from 5 to 10
-        growth_rates = np.random.normal(0.15, 0.08, n_points)  # Increased variation
-        market_caps = np.random.uniform(500, 15000, n_points)  # Wider range
-        peg_ratios = pe_ratios / (growth_rates * 100)
-
-        # Create the figures
-        rotation_fig = create_rotation_quadrant(sectors, show_labels, quadrant_colors, selected_period, rel_strength, rel_momentum)
-        volume_fig = create_volume_analysis(sectors, selected_period, volume_ratios)
-        performance_fig = create_performance_scatter(sectors, selected_period, returns, volatility, market_caps, sharpe_ratios)
-        valuation_fig = create_valuation_bubble(sectors, selected_period, pe_ratios, growth_rates, market_caps, peg_ratios)
-
-        # Create unified statistics table
-        stats_table = create_unified_stats_table(
-            sectors,
-            rel_strength, rel_momentum, volume_ratios,
-            returns, volatility, sharpe_ratios,
-            pe_ratios, growth_rates, peg_ratios, market_caps,
-            quadrant_colors
-        )
-
-        return rotation_fig, volume_fig, performance_fig, valuation_fig, stats_table
-
 def create_rotation_volume_stats(sectors, rel_strength, rel_momentum, volume_ratios, quadrant_colors):
     stats = []
     
@@ -1121,65 +1044,37 @@ def create_valuation_bubble(sectors, selected_period, pe_ratios, growth_rates, m
 
 def create_unified_stats_table(
     sectors,
-    rel_strength, rel_momentum, volume_ratios,
     returns, volatility, sharpe_ratios,
-    pe_ratios, growth_rates, peg_ratios, market_caps,
+    market_caps,
     quadrant_colors
 ):
     # Create table header with centered text
     header = html.Thead(html.Tr([
         html.Th("Sector", style={"width": "20%", "text-align": "center"}),
-        html.Th("Rotation", style={"width": "20%", "text-align": "center"}),
-        html.Th("Volume", style={"width": "20%", "text-align": "center"}),
-        html.Th("Risk Adj Perf", style={"width": "20%", "text-align": "center"}),
-        html.Th("Valuation", style={"width": "20%", "text-align": "center"}),
+        html.Th("Return", style={"width": "20%", "text-align": "center"}),
+        html.Th("Volatility", style={"width": "20%", "text-align": "center"}),
+        html.Th("Sharpe Ratio", style={"width": "20%", "text-align": "center"}),
     ]))
 
     rows = []
     for i, sector in enumerate(sectors):
-        # Rotation data
-        strength = rel_strength[i]
-        momentum = rel_momentum[i]
-        
-        # Determine quadrant and color
-        if momentum > 100 and strength > 100:
-            quadrant = "Leading"
-            color = quadrant_colors["leading"]
-        elif momentum > 100 and strength <= 100:
-            quadrant = "Improving"
-            color = quadrant_colors["improving"]
-        elif momentum <= 100 and strength <= 100:
-            quadrant = "Lagging"
-            color = quadrant_colors["lagging"]
-        else:
-            quadrant = "Weakening"
-            color = quadrant_colors["weakening"]
-        
-        # Volume data
-        volume = volume_ratios[i]
-        volume_change = f"{abs(volume-1):+.1%}"
-        
         # Performance data
+        ret = returns[i]
+        vol = volatility[i]
         sharpe = sharpe_ratios[i]
         
-        # Valuation data
-        peg = peg_ratios[i]
-
         row = html.Tr([
             # Sector name (centered)
             html.Td(html.Strong(sector), style={"text-align": "center"}),
             
-            # Rotation (with color, centered)
-            html.Td(html.Span(quadrant, style={"color": color}), style={"text-align": "center"}),
+            # Return (centered)
+            html.Td(f"{ret:.1%}", style={"text-align": "center"}),
             
-            # Volume (centered)
-            html.Td(volume_change, style={"text-align": "center"}),
+            # Volatility (centered)
+            html.Td(f"{vol:.1%}", style={"text-align": "center"}),
             
-            # Performance (centered)
+            # Sharpe ratio (centered)
             html.Td(f"{sharpe:.2f}", style={"text-align": "center"}),
-            
-            # Valuation (centered)
-            html.Td(f"{peg:.2f}", style={"text-align": "center"}),
         ])
         rows.append(row)
     

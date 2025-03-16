@@ -155,36 +155,6 @@ def create_funds_flow_sidebar():
                     ],
                     className="mb-4",
                 ),
-                html.H3("Visualization Settings", className="text-center mt-4"),
-                html.Div(
-                    [
-                        dbc.Checklist(
-                            options=[{"label": "Show Labels", "value": True}],
-                            value=[True],
-                            id="funds-flow-show-labels",
-                            switch=True,
-                            className="mt-3",
-                        ),
-                        dbc.Checklist(
-                            options=[{"label": "Show Trends", "value": True}],
-                            value=[True],
-                            id="funds-flow-show-trends",
-                            switch=True,
-                            className="mt-2",
-                        ),
-                        html.Label("Bubble Size", className="mt-3"),
-                        dcc.Dropdown(
-                            id="funds-flow-bubble-size",
-                            options=[
-                                {"label": "Equal", "value": "equal"},
-                                {"label": "Market Cap", "value": "market_cap"},
-                                {"label": "Volume", "value": "volume"},
-                            ],
-                            value="equal",
-                            clearable=False,
-                        ),
-                    ],
-                ),
             ],
             body=True,
             style={"width": "100%", "padding": "15px"},
