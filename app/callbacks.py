@@ -365,29 +365,64 @@ def register_callbacks(app):
     @app.callback(
         Output({"type": "indicator-selector", "index": MATCH}, "options"),
         Output({"type": "indicator-selector", "index": MATCH}, "value"),
+        Output({"type": "transform-selector", "index": MATCH}, "value"),
+        Output({"type": "graph-type-selector", "index": MATCH}, "value"),
         Input("indicator-group-selector", "value"),
+        Input({"type": "indicator-selector", "index": MATCH}, "value"),
         Input({"type": "indicator-selector", "index": MATCH}, "id"),
     )
-    def update_indicator_options(group, selector_id):
-        group_indicators = INDICATOR_GROUPS.get(group, [])
-        if not group_indicators:
-            return [], None
+    def update_indicator_and_defaults(group, selected_indicator, selector_id):
+        ctx = callback_context
+        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        
+        # If triggered by group selector
+        if triggered_id == "indicator-group-selector":
+            group_indicators = INDICATOR_GROUPS.get(group, [])
+            if not group_indicators:
+                return [], None, "raw", "line"
 
-        options = [
-            {
-                "label": INDICATORS[i]["description"],
-                "value": i,
-                "title": INDICATORS[i]["description"],
-            }
-            for i in group_indicators
-        ]
-        idx = selector_id['index'] - 1
-        default = (
-            group_indicators[idx]
-            if idx < len(group_indicators)
-            else group_indicators[0]
-        )
-        return options, default
+            options = [
+                {
+                    "label": INDICATORS[i]["description"],
+                    "value": i,
+                    "title": INDICATORS[i]["description"],
+                }
+                for i in group_indicators
+            ]
+            idx = selector_id['index'] - 1
+            default_indicator = (
+                group_indicators[idx]
+                if idx < len(group_indicators)
+                else group_indicators[0]
+            )
+            
+            # Get default transform and graph type from INDICATORS
+            default_transform = INDICATORS[default_indicator].get("default_transform", "raw")
+            default_graph_type = INDICATORS[default_indicator].get("default_graph_type", "line")
+            
+            return options, default_indicator, default_transform, default_graph_type
+            
+        # If triggered by indicator selector
+        else:
+            if not selected_indicator:
+                raise PreventUpdate
+                
+            # Keep existing options and selected indicator
+            group_indicators = INDICATOR_GROUPS.get(group, [])
+            options = [
+                {
+                    "label": INDICATORS[i]["description"],
+                    "value": i,
+                    "title": INDICATORS[i]["description"],
+                }
+                for i in group_indicators
+            ]
+            
+            # Get default transform and graph type for the newly selected indicator
+            default_transform = INDICATORS[selected_indicator].get("default_transform", "raw")
+            default_graph_type = INDICATORS[selected_indicator].get("default_graph_type", "line")
+            
+            return options, selected_indicator, default_transform, default_graph_type
 
     @app.callback(
         Output("date-picker", "start_date"),
@@ -419,13 +454,12 @@ def register_callbacks(app):
         Output("summary-stats", "children"),
         [
             Input({"type": "indicator-selector", "index": ALL}, "value"),
-            Input({"type": "transform-selector", "index": ALL}, "value"),
             Input("date-picker", "start_date"),
             Input("date-picker", "end_date"),
             Input("date-range-slider", "value"),
         ],
     )
-    def update_summary(indicators, transformations, start_date, end_date, slider_range):
+    def update_summary(indicators, start_date, end_date, slider_range):
         today = pd.to_datetime(datetime.today().strftime("%Y-%m-%d"))
         print("economic_data columns:", economic_data.columns.tolist())
         start_months, end_months = slider_range
@@ -444,48 +478,56 @@ def register_callbacks(app):
                 "No data available",
                 "Error: No data for selected range",
                 dash_table.DataTable(
-                    columns=[{"name": i, "id": i} for i in ["Indicator", "Value", "Δ MoM", "Δ YoY"]],
+                    columns=[{"name": i, "id": i} for i in ["Indicator", "Raw", "MoM %", "QoQ %", "YoY %"]],
                     data=[],
                 ),
             )
-
-        cols = [colname(ind, trans) for ind, trans in zip(indicators, transformations)]
-        missing_cols = [c for c in cols if c and c not in data.columns]
-        if missing_cols:
-            return (
-                "No data available",
-                f"Error: Missing columns {missing_cols}",
-                dash_table.DataTable(
-                    columns=[{"name": i, "id": i} for i in ["Indicator", "Value", "Δ MoM", "Δ YoY"]],
-                    data=[],
-                ),
-            )
-
-        last_date = data.index.max().strftime("%Y-%m-%d")
 
         table_data = []
-        for ind, trans, col in zip(indicators, transformations, cols):
-            if col in data.columns:
-                latest_value = data[col].iloc[-1]
-                mom_col = colname(ind, "mom")
-                yoy_col = colname(ind, "yoy")
-                change_mom = data[mom_col].iloc[-1] if mom_col in data.columns and len(data) > 1 else 0
-                change_yoy = data[yoy_col].iloc[-1] if yoy_col in data.columns and len(data) > 12 else 0
+        for ind in indicators:
+            if not ind:  # Skip if indicator is None
+                continue
 
-                # Truncate long indicator names with ...
-                indicator_name = INDICATORS[ind]["description"]
-                max_length = 20  # Adjust this value based on your preference
-                truncated_indicator = (indicator_name[:max_length] + "...") if len(indicator_name) > max_length else indicator_name
+            # Get raw value and all transformations
+            raw_col = colname(ind, "raw")
+            mom_col = colname(ind, "mom")
+            qoq_col = colname(ind, "qoq")
+            yoy_col = colname(ind, "yoy")
 
-                table_data.append({
-                    "Indicator": truncated_indicator,
-                    "Value": f"{latest_value:.2f}",
-                    "Δ MoM": f"{change_mom:.2f}%",
-                    "Δ YoY": f"{change_yoy:.2f}%",
-                })
+            if raw_col not in data.columns:
+                continue
+
+            # Get latest values for each transformation
+            raw_value = data[raw_col].iloc[-1]
+            mom_value = data[mom_col].iloc[-1] if mom_col in data.columns and len(data) > 1 else None
+            qoq_value = data[qoq_col].iloc[-1] if qoq_col in data.columns and len(data) > 3 else None
+            yoy_value = data[yoy_col].iloc[-1] if yoy_col in data.columns and len(data) > 12 else None
+
+            # Truncate long indicator names with ...
+            indicator_name = INDICATORS[ind]["description"]
+            max_length = 20  # Adjust this value based on your preference
+            truncated_indicator = (indicator_name[:max_length] + "...") if len(indicator_name) > max_length else indicator_name
+
+            table_data.append({
+                "Indicator": truncated_indicator,
+                "Raw": f"{raw_value:,.2f}".replace(",", " "),  # Format with thousand separator using space
+                "MoM %": f"{mom_value:.2f}" if mom_value is not None else "N/A",
+                "QoQ %": f"{qoq_value:.2f}" if qoq_value is not None else "N/A",
+                "YoY %": f"{yoy_value:.2f}" if yoy_value is not None else "N/A",
+            })
+
+        # Get the last day of the previous month for "Last Updated" date
+        today = datetime.today()
+        if today.month == 1:  # January
+            last_month_end = datetime(today.year - 1, 12, 31)
+        else:
+            # Find the last day by getting the first day of current month and subtracting one day
+            last_month_end = datetime(today.year, today.month, 1) - pd.Timedelta(days=1)
+            
+        last_date = last_month_end.strftime("%Y-%m-%d")
 
         summary_table = dash_table.DataTable(
-            columns=[{"name": i, "id": i} for i in ["Indicator", "Value", "Δ MoM", "Δ YoY"]],
+            columns=[{"name": i, "id": i} for i in ["Indicator", "Raw", "MoM %", "QoQ %", "YoY %"]],
             data=table_data,
             style_table={},
             style_cell={
@@ -497,17 +539,28 @@ def register_callbacks(app):
                 "textOverflow": "ellipsis",  # Add ... for truncated text
                 "maxWidth": "150px",     # Set a max width for the Indicator column
             },
+            style_cell_conditional=[
+                {"if": {"column_id": "Indicator"}, "textAlign": "left"},
+                {"if": {"column_id": "Raw"}, "textAlign": "center"},
+                {"if": {"column_id": "MoM %"}, "textAlign": "center"},
+                {"if": {"column_id": "QoQ %"}, "textAlign": "center"},
+                {"if": {"column_id": "YoY %"}, "textAlign": "center"},
+            ],
             style_header={
                 "backgroundColor": "rgb(230, 230, 230)",
                 "fontWeight": "bold",
             },
             style_data_conditional=[
                 {
-                    "if": {"filter_query": "{Δ MoM} < 0"},
+                    "if": {"column_id": "MoM %", "filter_query": "{MoM %} < 0 && {MoM %} != 'N/A'"},
                     "color": "red",
                 },
                 {
-                    "if": {"filter_query": "{Δ YoY} < 0"},
+                    "if": {"column_id": "QoQ %", "filter_query": "{QoQ %} < 0 && {QoQ %} != 'N/A'"},
+                    "color": "red",
+                },
+                {
+                    "if": {"column_id": "YoY %", "filter_query": "{YoY %} < 0 && {YoY %} != 'N/A'"},
                     "color": "red",
                 },
             ],
@@ -615,10 +668,11 @@ def register_callbacks(app):
         ],
     )
     def update_summary_tab(indicators, transformations, start_date, end_date, slider_range):
-        # Reuse the existing update_summary logic
+        # Get the summary data
         last_updated, error_message, summary_table = update_summary(
-            indicators, transformations, start_date, end_date, slider_range
+            indicators, start_date, end_date, slider_range
         )
+        
         return [
             html.P(last_updated, style={"text-align": "center", "margin-bottom": "10px"}),
             html.Div(error_message, style={"color": "red", "text-align": "center", "margin-bottom": "10px"}) if error_message else "",
