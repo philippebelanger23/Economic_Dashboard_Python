@@ -242,5 +242,54 @@ def create_news_sidebar():
         ),
     ]
 
+def create_regressions_sidebar():
+    return [
+        html.H1(
+            "Regressions Analysis",
+            className="text-center",
+            style={"margin-bottom": MARGIN_TITLE_TO_LAST_UPDATED},
+        ),
+        dbc.Card(
+            [
+                html.H3("Regression Settings", className="text-center"),
+                html.Div(
+                    [
+                        html.Label("Select Variables", className="mt-3"),
+                        dcc.Dropdown(
+                            id="regression-variable-selector",
+                            options=[],  # Will be populated dynamically
+                            multi=True,
+                            style={"width": "100%", "margin-bottom": "10px"},
+                        ),
+                        html.Label("Time Period", className="mt-3"),
+                        dcc.DatePickerRange(
+                            id="regression-date-picker",
+                            min_date_allowed="1970-01-01",
+                            max_date_allowed=today_str,
+                            start_date="2020-01-01",
+                            end_date=today_str,
+                            display_format="YYYY-MM-DD",
+                            style={"width": "100%", "textAlign": "center"},
+                        ),
+                    ],
+                    className="mb-4",
+                ),
+            ],
+            body=True,
+            style={"width": "100%", "padding": "15px"},
+        ),
+        dbc.Card(
+            [
+                dbc.CardHeader(
+                    html.H3("Regression Results", className="text-center m-0"),
+                ),
+                dbc.CardBody([
+                    html.Div(id="regression-results"),
+                ]),
+            ],
+            style={"margin-top": MARGIN_FILTERS_TO_SUMMARY},
+        ),
+    ]
+
 # Main sidebar container that will be updated based on the selected tab
 sidebar = html.Div(id="sidebar-content")

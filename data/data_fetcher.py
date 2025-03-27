@@ -8,9 +8,9 @@ from datetime import datetime
 import json
 import time
 import os
+from typing import Dict, List, Optional, Set, Union, Any
 
-print("FRED_API_KEY:", FRED_API_KEY)
-
+# Initialize the FRED API client
 fred = Fred(api_key=FRED_API_KEY)
 CACHE_FILE = BASE_DIR / "data" / "fred_cache.pkl"
 CACHE_METADATA_FILE = BASE_DIR / "data" / "fred_cache_metadata.json"
@@ -18,17 +18,40 @@ RELEASE_DATES_CACHE = BASE_DIR / "data" / "release_dates_cache.json"
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-def fetch_series(series):
+def fetch_series(series: str) -> pd.Series:
+    """
+    Fetch a time series from FRED with retry logic.
+    
+    Args:
+        series: FRED series ID
+        
+    Returns:
+        pandas.Series containing the fetched data
+        
+    Raises:
+        Exception: If fetching fails after all retry attempts
+    """
     print(f"Attempting to fetch series {series}...")
     series_data = fred.get_series(series)
+    if series_data is None or series_data.empty:
+        raise ValueError(f"No data returned for series {series}")
     print(f"Successfully fetched {series} with {len(series_data)} data points")
     return series_data
 
 
-def fetch_fred_data(force_refresh=False):
+def fetch_fred_data(force_refresh: bool = False) -> pd.DataFrame:
+    """
+    Fetch economic data from FRED API with caching support.
+    
+    Args:
+        force_refresh: If True, ignore cache and fetch all data again
+        
+    Returns:
+        DataFrame containing all economic indicators
+    """
     # Load existing cache and metadata if available
-    cached_data = {}
-    cached_indicators = set()
+    cached_data = pd.DataFrame()
+    cached_indicators: Set[str] = set()
 
     if CACHE_FILE.exists() and not force_refresh:
         print("Loading cached data from", CACHE_FILE)
@@ -112,16 +135,16 @@ def fetch_fred_data(force_refresh=False):
     return df
 
 
-def fetch_rss_feed(url, num_articles=5):
+def fetch_rss_feed(url: str, num_articles: int = 5) -> List[Dict[str, str]]:
     """
     Fetch and return the latest RSS feed articles from the specified URL.
 
     Parameters:
-        url (str): The URL of the RSS feed.
-        num_articles (int): Number of articles to return (default: 5)
+        url: The URL of the RSS feed.
+        num_articles: Number of articles to return (default: 5)
 
     Returns:
-        list: A list of dictionaries, each containing the title, link, publication date, and summary.
+        A list of dictionaries, each containing the title, link, publication date, and summary.
         Returns an empty list if the fetch fails.
     """
     try:
@@ -162,7 +185,16 @@ def fetch_rss_feed(url, num_articles=5):
         return []
 
 
-def fetch_next_release_date(series_id):
+def fetch_next_release_date(series_id: str) -> str:
+    """
+    Fetch the next release date for a specific FRED series.
+    
+    Args:
+        series_id: FRED series ID
+        
+    Returns:
+        String with the next release date or appropriate status message
+    """
     try:
         release_info = fred.get_series_release(series_id)
         release_id = release_info["id"]
@@ -193,23 +225,37 @@ def fetch_next_release_date(series_id):
         return "Unknown"
 
 
-def get_all_next_release_dates(force_refresh=False):
+def get_all_next_release_dates(force_refresh: bool = False) -> Dict[str, str]:
+    """
+    Get next release dates for all indicators in the system.
+    
+    Args:
+        force_refresh: If True, ignore cache and fetch all dates again
+        
+    Returns:
+        Dictionary mapping series IDs to their next release dates
+    """
     if RELEASE_DATES_CACHE.exists() and not force_refresh:
         with open(RELEASE_DATES_CACHE, "r") as f:
             return json.load(f)
 
     from data.mappings import INDICATORS
-
     release_dates = {}
+    
     for key, info in INDICATORS.items():
-        series_id = info["id"]
-        print(f"Fetching next release date for {key} ({series_id})...")
-        next_date = fetch_next_release_date(series_id)
-        release_dates[series_id] = next_date
-
+        try:
+            series_id = info["id"]
+            release_dates[series_id] = fetch_next_release_date(series_id)
+            # Add a small delay to avoid rate limiting
+            time.sleep(0.5)
+        except Exception as e:
+            print(f"❌ Error getting release date for {key}: {e}")
+            release_dates[info["id"]] = "Unknown"
+    
+    # Save to cache
     with open(RELEASE_DATES_CACHE, "w") as f:
         json.dump(release_dates, f)
-
+        
     return release_dates
 
 

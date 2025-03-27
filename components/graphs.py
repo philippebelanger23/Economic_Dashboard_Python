@@ -4,9 +4,11 @@ from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, State
 from components.rss_news import rss_news
 from data.mappings import INDICATOR_GROUPS
+from data.sector_data import fetch_sector_data, calculate_sector_metrics, get_sector_analysis_data, get_market_breadth_data
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from scipy.signal import find_peaks
 
 def create_sector_analysis_layout():
     return dbc.Row([
@@ -14,13 +16,13 @@ def create_sector_analysis_layout():
         dbc.Col([
             # Top row with two graphs
             dbc.Row([
-                # Sector Rotation Quadrant (Top Left)
+                # Relative Performance vs Momentum (Top Left)
                 dbc.Col([
                     dbc.Card([
-                        dbc.CardHeader("Sector Rotation Quadrant"),
+                        dbc.CardHeader("Relative Perf vs. Momentum"),
                         dbc.CardBody(
                             dcc.Graph(
-                                id="sector-rotation-quadrant",
+                                id="relative-perf-momentum",
                                 style={"height": "35vh"},
                                 config={
                                     "displayModeBar": False,
@@ -31,13 +33,13 @@ def create_sector_analysis_layout():
                     ])
                 ], width=6),
                 
-                # Relative Performance (Top Right)
+                # Relative Strength vs Price Momentum (Top Right)
                 dbc.Col([
                     dbc.Card([
-                        dbc.CardHeader("Relative Performance"),
+                        dbc.CardHeader("Relative Strength vs. Price Momentum"),
                         dbc.CardBody(
                             dcc.Graph(
-                                id="relative-performance",
+                                id="strength-price-momentum",
                                 style={"height": "35vh"},
                                 config={
                                     "displayModeBar": False,
@@ -51,7 +53,7 @@ def create_sector_analysis_layout():
 
             # Bottom row with two graphs
             dbc.Row([
-                # Sector Heatmap (Bottom Left)
+                # Sector Rotation Heatmap (Bottom Left)
                 dbc.Col([
                     dbc.Card([
                         dbc.CardHeader("Sector Rotation Heatmap"),
@@ -68,13 +70,13 @@ def create_sector_analysis_layout():
                     ])
                 ], width=6),
                 
-                # Relative Valuation (Bottom Right)
+                # Market Breadth (Bottom Right)
                 dbc.Col([
                     dbc.Card([
-                        dbc.CardHeader("Relative Valuation"),
+                        dbc.CardHeader("Market Breadth"),
                         dbc.CardBody(
                             dcc.Graph(
-                                id="relative-valuation",
+                                id="sectors-above-200ma",
                                 style={"height": "35vh"},
                                 config={
                                     "displayModeBar": False,
@@ -116,6 +118,16 @@ content = dbc.Container(
                     ],
                 ),
                 dcc.Tab(
+                    label="Regressions",
+                    value="tab-regressions",
+                    children=[
+                        dbc.Row(
+                            html.Div("Regressions content will go here", style={"margin-top": "20px"}),
+                            style={"margin-top": "20px"},
+                        )
+                    ],
+                ),
+                dcc.Tab(
                     label="News",
                     value="tab-news",
                     children=[
@@ -135,10 +147,10 @@ def register_sector_callbacks(app):
     """Register only sector-specific callbacks"""
     @app.callback(
         [
-            Output("sector-rotation-quadrant", "figure"),
+            Output("relative-perf-momentum", "figure"),
+            Output("strength-price-momentum", "figure"),
             Output("sector-heatmap", "figure"),
-            Output("relative-valuation", "figure"),
-            Output("relative-performance", "figure"),
+            Output("sectors-above-200ma", "figure"),
             Output("sector-stats-table", "children"),
         ],
         [
@@ -146,65 +158,420 @@ def register_sector_callbacks(app):
         ]
     )
     def update_sector_graphs(selected_period):
-        # Default values for removed visualization settings
-        show_labels = True
-        show_trends = True
-        bubble_size = "equal"
-        
-        # Sample sectors
-        sectors = [
-            "Technology", "Healthcare", "Financials", "Discretionary",
-            "Comm. Services", "Industrials", "Staples",
-            "Energy", "Materials", "Real Estate", "Utilities"
-        ]
-        
-        # Use a random seed each time the callback is triggered
-        # This will generate new random data whenever the date changes
-        np.random.seed(None)  # Reset the seed to None to get truly random data
-        
-        # Generate data for all graphs
-        momentum = np.random.normal(0, 1, len(sectors))
-        strength = np.random.normal(0, 1, len(sectors))
-        returns = np.random.normal(0.10, 0.15, len(sectors))  # For Sharpe ratio
-        volatility = np.random.normal(0.20, 0.10, len(sectors))
-        spy_return = 0.08  # Sample SPY return
-        pe_ratios = np.random.normal(25, 10, len(sectors))
-        growth_rates = np.random.normal(0.15, 0.08, len(sectors))
-        market_caps = np.random.uniform(500, 15000, len(sectors))  # For bubble sizes
-        
-        # Calculate metrics for sidebar
-        rf_rate = 0.02  # Risk-free rate
-        sharpe_ratios = (returns - rf_rate) / volatility
-        rel_performance = returns - spy_return
-        peg_ratios = pe_ratios / (growth_rates * 100)
-        
-        # Create figures
-        rotation_fig = create_rotation_quadrant(sectors, show_labels, {
-            "leading": "#2ecc71",     # Green
-            "improving": "#3498db",    # Blue
-            "lagging": "#e74c3c",     # Red
-            "weakening": "#f1c40f"    # Yellow
-        }, selected_period, strength, momentum)
-        
-        heatmap_fig = create_sector_heatmap(sectors)
-        valuation_fig = create_relative_valuation(sectors, pe_ratios, growth_rates)
-        performance_fig = create_performance_scatter(sectors, selected_period, returns, volatility, market_caps, sharpe_ratios)
-        
-        # Create sidebar statistics table
-        stats_table = create_unified_stats_table(
-            sectors,
-            returns, volatility, sharpe_ratios,
-            market_caps,
-            {
-                "leading": "#2ecc71",     # Green
-                "improving": "#3498db",    # Blue
-                "lagging": "#e74c3c",     # Red
-                "weakening": "#f1c40f"    # Yellow
-            },
-            growth_rates, pe_ratios, peg_ratios  # Pass these values to avoid regenerating them
+        # Fetch real sector data
+        end_date = pd.Timestamp.now()
+        start_date = end_date - pd.Timedelta(days=365)
+        sector_data, benchmark_data = fetch_sector_data(
+            start_date.strftime('%Y-%m-%d'),
+            end_date.strftime('%Y-%m-%d')
         )
         
-        return rotation_fig, heatmap_fig, valuation_fig, performance_fig, stats_table
+        # Get market breadth data specifically for the chart
+        dates, spy_rsp_ratio = get_market_breadth_data(period=selected_period)
+        
+        # If market breadth data fetching failed, try alternate method
+        if dates is None or spy_rsp_ratio is None:
+            # Calculate SPY/RSP ratio for market breadth from the benchmark data
+            if 'SPY' in benchmark_data.columns and 'RSP' in benchmark_data.columns:
+                # Convert period to days
+                period_days = {
+                    '4W': 28, '8W': 56, '12W': 84,
+                    '26W': 182, '39W': 273, '52W': 364
+                }
+                days = period_days.get(selected_period, 364)
+                
+                # Calculate ratio of SPY to RSP (higher ratio = narrower market)
+                spy_rsp_ratio = benchmark_data['SPY'] / benchmark_data['RSP']
+                
+                # Take only the required period of data from the end
+                if len(spy_rsp_ratio) > days:
+                    spy_rsp_ratio = spy_rsp_ratio[-days:]
+                
+                # Normalize to start at 1.0
+                spy_rsp_ratio = spy_rsp_ratio / spy_rsp_ratio.iloc[0]
+                dates = spy_rsp_ratio.index
+            else:
+                # Fallback to random data if real data not available
+                dates = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
+                spy_rsp_ratio = None
+        
+        # Sample sectors (use real sector data if available)
+        if not sector_data.empty:
+            sectors = list(sector_data.columns)
+        else:
+            sectors = [
+                "Technology", "Healthcare", "Financials", "Discretionary",
+                "Comm. Services", "Industrials", "Staples",
+                "Energy", "Materials", "Real Estate", "Utilities"
+            ]
+        
+        # Rest of the function - still using random data for other graphs
+        # Generate sample data
+        np.random.seed(None)
+        
+        # Data for Relative Perf vs Momentum
+        rel_perf = np.random.normal(0, 1, len(sectors))
+        momentum = np.random.normal(0, 1, len(sectors))
+        macd = np.random.normal(0, 0.5, len(sectors))
+        roc = np.random.normal(0, 5, len(sectors))
+        
+        # Data for Strength vs Price Momentum
+        rel_strength = np.random.normal(0, 1, len(sectors))
+        price_momentum = np.random.normal(0, 1, len(sectors))
+        ma = np.random.normal(0, 0.5, len(sectors))
+        
+        # Data for heatmap
+        timeframes = ["1W", "1M", "3M", "6M", "12M"]
+        heatmap_data = np.random.normal(0, 1, (len(sectors), len(timeframes)))
+        
+        # Data for sectors above 200MA - not used anymore, but kept for compatibility
+        pct_above_200ma = np.random.uniform(30, 70, len(dates))
+        
+        # Create figures
+        perf_momentum_fig = create_relative_perf_momentum(sectors, rel_perf, momentum, macd, roc)
+        strength_momentum_fig = create_strength_price_momentum(sectors, rel_strength, price_momentum, ma)
+        heatmap_fig = create_sector_heatmap(sectors, timeframes, heatmap_data)
+        above_200ma_fig = create_sectors_above_200ma(dates, pct_above_200ma, spy_rsp_ratio)
+        
+        # Generate additional data needed for stats table
+        growth_rates = np.random.normal(0.15, 0.08, len(sectors))
+        pe_ratios = np.random.normal(25, 10, len(sectors))
+        peg_ratios = pe_ratios / (growth_rates * 100)
+        
+        # Create stats table
+        stats_table = create_unified_stats_table(
+            sectors=sectors,
+            returns=rel_perf,
+            volatility=momentum,
+            sharpe_ratios=macd,
+            market_caps=np.random.uniform(500, 15000, len(sectors)),
+            quadrant_colors={
+                "leading": "#2ecc71",
+                "improving": "#3498db",
+                "lagging": "#e74c3c",
+                "weakening": "#f1c40f"
+            },
+            growth_rates=growth_rates,
+            pe_ratios=pe_ratios,
+            peg_ratios=peg_ratios
+        )
+        
+        return perf_momentum_fig, strength_momentum_fig, heatmap_fig, above_200ma_fig, stats_table
+
+def create_relative_perf_momentum(sectors, rel_perf, momentum, macd, roc):
+    fig = go.Figure()
+    
+    # Add scatter plot with bubbles
+    fig.add_trace(go.Scatter(
+        x=macd,          # MACD Momentum on Relative Strength
+        y=rel_perf,      # Relative Performance vs. SPY
+        mode="markers+text",
+        text=sectors,
+        textposition="top center",
+        marker=dict(
+            size=np.abs(roc) * 5,  # Reduced multiplier from 10 to 5
+            sizemode='area',
+            sizeref=0.1,  # Fixed size reference for more consistent sizing
+            sizemin=8,    # Minimum bubble size
+            color=rel_perf,
+            colorscale="RdYlGn",
+            showscale=False,  # Hide the color bar
+            line=dict(color='white', width=1)  # Add white border for better visibility
+        ),
+        hovertemplate=(
+            "<b>%{text}</b><br>" +
+            "MACD Momentum: %{x:.2f}<br>" +
+            "Rel Perf vs SPY: %{y:.1%}<br>" +
+            "ROC: %{customdata:.1f}%<br>" +
+            "<extra></extra>"
+        ),
+        customdata=roc,
+    ))
+    
+    # Add quadrant lines
+    fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+    fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
+    
+    # Add quadrant labels
+    fig.add_annotation(x=max(macd)*0.5, y=max(rel_perf)*0.5, text="<b>LEADING</b>", showarrow=False, font=dict(size=10, color="green"))
+    fig.add_annotation(x=min(macd)*0.5, y=max(rel_perf)*0.5, text="<b>IMPROVING</b>", showarrow=False, font=dict(size=10, color="blue"))
+    fig.add_annotation(x=min(macd)*0.5, y=min(rel_perf)*0.5, text="<b>LAGGING</b>", showarrow=False, font=dict(size=10, color="red"))
+    fig.add_annotation(x=max(macd)*0.5, y=min(rel_perf)*0.5, text="<b>WEAKENING</b>", showarrow=False, font=dict(size=10, color="orange"))
+    
+    fig.update_layout(
+        title=dict(
+            text="Tracks which sectors are leading/lagging and where money is flowing",
+            y=0.95,
+            x=0.5,
+            xanchor='center',
+            yanchor='top'
+        ),
+        xaxis=dict(
+            title="MACD Momentum on Relative Strength",
+            title_font=dict(size=12),
+            showgrid=True,
+            gridcolor='lightgray',
+            zeroline=True,
+            zerolinecolor='gray',
+            zerolinewidth=1
+        ),
+        yaxis=dict(
+            title="Relative Performance vs. SPY",
+            title_font=dict(size=12),
+            showgrid=True,
+            gridcolor='lightgray',
+            zeroline=True,
+            zerolinecolor='gray',
+            zerolinewidth=1,
+            tickformat=".1%"
+        ),
+        plot_bgcolor="white",
+        showlegend=False,
+        margin=dict(t=50, l=50, r=50, b=50),
+    )
+    
+    return fig
+
+def create_strength_price_momentum(sectors, rel_strength, price_momentum, ma):
+    fig = go.Figure()
+    
+    # Calculate 3-month relative strength change (for bubble size)
+    rel_strength_change = np.random.normal(0, 0.15, len(sectors))  # Simulated 3-month change
+    
+    # Add scatter plot with bubbles
+    fig.add_trace(go.Scatter(
+        x=ma,              # 50MA vs 200MA momentum
+        y=rel_strength,    # Relative Strength Ratio
+        mode="markers+text",
+        text=sectors,
+        textposition="top center",
+        marker=dict(
+            size=np.abs(rel_strength_change) * 5,  # Match first graph's multiplier
+            sizemode='area',
+            sizeref=0.1,  # Fixed size reference for more consistent sizing
+            sizemin=8,    # Minimum bubble size
+            color=rel_strength,
+            colorscale="RdYlGn",
+            showscale=False,  # Hide the color bar
+            line=dict(color='white', width=1)  # Add white border for better visibility
+        ),
+        hovertemplate=(
+            "<b>%{text}</b><br>" +
+            "MA Momentum: %{x:.2f}<br>" +
+            "Relative Strength: %{y:.2f}<br>" +
+            "3M RS Change: %{customdata:.1%}<br>" +
+            "<extra></extra>"
+        ),
+        customdata=rel_strength_change,
+    ))
+    
+    # Add quadrant lines
+    fig.add_hline(y=1, line_dash="dash", line_color="gray", opacity=0.5)
+    fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
+    
+    # Add quadrant labels
+    fig.add_annotation(x=max(ma)*0.5, y=max(rel_strength)*0.5, text="<b>LEADING</b>", showarrow=False, font=dict(size=10, color="green"))
+    fig.add_annotation(x=min(ma)*0.5, y=max(rel_strength)*0.5, text="<b>IMPROVING</b>", showarrow=False, font=dict(size=10, color="blue"))
+    fig.add_annotation(x=min(ma)*0.5, y=min(rel_strength)*0.5, text="<b>LAGGING</b>", showarrow=False, font=dict(size=10, color="red"))
+    fig.add_annotation(x=max(ma)*0.5, y=min(rel_strength)*0.5, text="<b>WEAKENING</b>", showarrow=False, font=dict(size=10, color="orange"))
+    
+    fig.update_layout(
+        title=dict(
+            text="Detects trend continuation vs. trend reversals",
+            y=0.95,
+            x=0.5,
+            xanchor='center',
+            yanchor='top'
+        ),
+        xaxis=dict(
+            title="50-day MA vs 200-day MA Momentum",
+            title_font=dict(size=12),
+            showgrid=True,
+            gridcolor='lightgray',
+            zeroline=True,
+            zerolinecolor='gray',
+            zerolinewidth=1
+        ),
+        yaxis=dict(
+            title="Relative Strength Ratio (Sector/SPY)",
+            title_font=dict(size=12),
+            showgrid=True,
+            gridcolor='lightgray',
+            zeroline=True,
+            zerolinecolor='gray',
+            zerolinewidth=1,
+        ),
+        plot_bgcolor="white",
+        showlegend=False,
+        margin=dict(t=50, l=50, r=50, b=50),
+    )
+    
+    return fig
+
+def create_sector_heatmap(sectors, timeframes, data):
+    # Data represents relative performance vs SPY
+    fig = go.Figure(data=go.Heatmap(
+        z=data,
+        x=timeframes,
+        y=sectors,
+        colorscale="RdYlGn",     # Red for underperformance, green for outperformance vs SPY
+        showscale=False,         # Hide the color scale
+        hovertemplate=(
+            "<b>%{y}</b><br>" +
+            "Timeframe: %{x}<br>" +
+            "Rel. Perf: %{z:.1%}<br>" +
+            "<extra></extra>"
+        ),
+    ))
+    
+    fig.update_layout(
+        title=dict(
+            text="Shows rotation trends over different timeframes",
+            y=0.95,
+            x=0.5,
+            xanchor='center',
+            yanchor='top'
+        ),
+        xaxis=dict(
+            title="Timeframe",
+            title_font=dict(size=12),
+            tickfont=dict(size=10),
+        ),
+        yaxis=dict(
+            title="Sectors",
+            title_font=dict(size=12),
+            tickfont=dict(size=10),
+        ),
+        plot_bgcolor="white",
+        margin=dict(t=50, l=50, r=50, b=50),
+    )
+    
+    return fig
+
+def create_sectors_above_200ma(dates, pct_above_200ma, spy_rsp_ratio=None):
+    # Use real SPY/RSP ratio data if provided, otherwise fallback to simulation
+    if spy_rsp_ratio is None:
+        # For SPY/RSP ratio simulation
+        # When ratio increases, it means large caps are leading (narrow market)
+        # When ratio decreases, it means equal weight is leading (broad market)
+        np.random.seed(None)
+        spy_rsp_ratio = 1 + np.cumsum(np.random.normal(0, 0.001, len(dates)))  # Simulate ratio around 1.0
+    
+    # Apply smoothing to the data to reduce spikiness (using rolling mean)
+    if len(spy_rsp_ratio) > 5:  # Only smooth if enough data points
+        smoothed_ratio = pd.Series(spy_rsp_ratio).rolling(window=5, center=True, min_periods=1).mean().values
+    else:
+        smoothed_ratio = spy_rsp_ratio
+    
+    # Calculate the maximum deviation from 1.0 to set symmetric axis range
+    max_deviation = max(
+        abs(max(smoothed_ratio) - 1.0),
+        abs(min(smoothed_ratio) - 1.0)
+    )
+    y_min = 1.0 - max_deviation
+    y_max = 1.0 + max_deviation
+    
+    fig = go.Figure()
+    
+    # Add baseline at 1.0 first (no fill)
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=[1.0] * len(dates),
+        mode='lines',
+        line=dict(color='rgba(0,0,0,0)'),  # Invisible line
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # Add the main line plot for values above 1.0 (no fill)
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=np.maximum(smoothed_ratio, 1.0),
+        mode='lines',
+        line=dict(
+            color='black',
+            width=1.5,
+            shape='spline',  # Add spline curve for smoothness
+            smoothing=1.3     # Increase smoothing factor
+        ),
+        fill='tonexty',
+        fillcolor='rgba(0, 0, 0, 0)',  # Transparent fill for values above 1.0
+        showlegend=False
+    ))
+    
+    # Add the line plot for values below 1.0 (red fill)
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=np.minimum(smoothed_ratio, 1.0),
+        mode='lines',
+        line=dict(
+            color='black',
+            width=1.5,
+            shape='spline',  # Add spline curve for smoothness
+            smoothing=1.3     # Increase smoothing factor
+        ),
+        fill='tonexty',
+        fillcolor='rgba(255, 0, 0, 0.4)',  # Red fill for values below 1.0
+        showlegend=False
+    ))
+    
+    # Add the line plot for values above 1.0 (green fill)
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=smoothed_ratio,
+        mode='lines',
+        line=dict(
+            color='black',
+            width=1.5,
+            shape='spline',  # Add spline curve for smoothness
+            smoothing=1.3     # Increase smoothing factor
+        ),
+        fill='tonexty',
+        fillcolor='rgba(123, 228, 161, 0.8)',  # RGB from color picker (123, 228, 161)
+        showlegend=False,
+        hovertemplate=(
+            "Date: %{x|%Y-%m-%d}<br>" +
+            "SPY/RSP: %{y:.3f}<br>" +
+            "<extra></extra>"
+        )
+    ))
+    
+    fig.update_layout(
+        title=dict(
+            text="Market Breadth",
+            y=0.95,
+            x=0.5,
+            xanchor='center',
+            yanchor='top'
+        ),
+        xaxis=dict(
+            title="Time",
+            title_font=dict(size=12),
+            showgrid=True,
+            gridcolor='lightgray',
+            zeroline=False
+        ),
+        yaxis=dict(
+            title="Breadth (SPY/RSP)",
+            title_font=dict(size=12),
+            showgrid=True,
+            gridcolor='lightgray',
+            zeroline=False,
+            tickformat=".3f",
+            range=[y_min, y_max],  # Set symmetric range around 1.0
+            dtick=0.01  # Set tick interval to 0.01
+        ),
+        plot_bgcolor="white",
+        showlegend=False,
+        margin=dict(t=50, l=50, r=50, b=50),
+        hovermode='x unified',
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=12
+        ),
+    )
+    
+    return fig
 
 def create_sidebar_stats(sectors, momentum, strength, sharpe_ratios, rel_performance, peg_ratios):
     # Determine quadrant for each sector
@@ -332,39 +699,6 @@ def create_rotation_quadrant(sectors, show_labels, quadrant_colors, selected_per
         xaxis_title="Relative Strength",
         yaxis_title="Momentum",
         showlegend=False,
-        plot_bgcolor="white",
-        margin=dict(t=70),  # Increase top margin for higher annotation
-        annotations=[annotation]
-    )
-    
-    return fig
-
-def create_sector_heatmap(sectors):
-    # Add descriptive annotation above the title
-    annotation = dict(
-        text="Shows how sectors perform vs SPY across different timeframes",
-        xref="paper", yref="paper",
-        x=-0.05, y=1.25,  # Position at top-left
-        showarrow=False,
-        font=dict(size=12, color="gray"),
-        align="left",
-    )
-    
-    # Generate sample data for different timeframes
-    timeframes = ["1W", "1M", "3M", "6M", "12M"]
-    data = np.random.normal(0, 1, (len(sectors), len(timeframes)))
-    
-    fig = go.Figure(data=go.Heatmap(
-        z=data,
-        x=timeframes,
-        y=sectors,
-        colorscale="RdYlGn",
-        colorbar_title="Rel. Perf",
-    ))
-    
-    fig.update_layout(
-        xaxis_title="Timeframe",
-        yaxis_title="Sectors",
         plot_bgcolor="white",
         margin=dict(t=70),  # Increase top margin for higher annotation
         annotations=[annotation]
@@ -500,7 +834,17 @@ def create_performance_scatter(sectors, selected_period, returns, volatility, ma
     
     return fig
 
-def create_unified_stats_table(sectors, returns, volatility, sharpe_ratios, market_caps, quadrant_colors, growth_rates, pe_ratios, peg_ratios):
+def create_unified_stats_table(
+    sectors,
+    returns,
+    volatility,
+    sharpe_ratios,
+    market_caps,
+    quadrant_colors,
+    growth_rates,
+    pe_ratios,
+    peg_ratios
+):
     # Determine quadrant for each sector based on returns and volatility
     quadrants = []
     for ret, vol in zip(returns, volatility):

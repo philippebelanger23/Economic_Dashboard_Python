@@ -26,6 +26,7 @@ from components.sidebar import (
     create_economics_sidebar,
     create_funds_flow_sidebar,
     create_news_sidebar,
+    create_regressions_sidebar,
 )
 
 # -------------------
@@ -688,6 +689,8 @@ def register_callbacks(app):
             return create_economics_sidebar()
         elif selected_tab == "tab-funds-flow":
             return create_funds_flow_sidebar()
+        elif selected_tab == "tab-regressions":
+            return create_regressions_sidebar()
         elif selected_tab == "tab-news":
             return create_news_sidebar()
         return create_economics_sidebar()  # Default to economics sidebar
